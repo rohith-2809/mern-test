@@ -17,12 +17,9 @@ const FLASK_URL = process.env.FLASK_URL || "http://127.0.0.1:5001";
 const GEMINI_URL = process.env.GEMINI_URL || "http://127.0.0.1:5002";
 const JWT_SECRET = process.env.JWT_SECRET || "secretkey";
 
-// Connect to MongoDB (using env-based URI)
+// Connect to MongoDB (no deprecated options)
 mongoose
-  .connect(MONGODB_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-  })
+  .connect(MONGODB_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => console.error("❌ MongoDB connection error:", err));
 
@@ -112,7 +109,7 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
       return res.status(400).json({ message: "Image is required" });
     }
 
-    // Call Flask API for prediction (env-based URL)
+    // Call Flask API for prediction
     const flaskResponse = await axios.post(
       `${FLASK_URL}/predict`,
       image.buffer,
@@ -120,7 +117,7 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
     );
     const status = flaskResponse.data.prediction;
 
-    // Call Gemini API to get recommendation (env-based URL)
+    // Call Gemini API to get recommendation
     const geminiResponse = await axios.post(`${GEMINI_URL}/gemini`, {
       status,
       plantType,
