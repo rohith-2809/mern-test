@@ -26,11 +26,14 @@ const Login = () => {
     setIsLoading(true);
 
     try {
-      // Replace this IP with your computer's IP if needed
-      const response = await axios.post("http://192.168.29.41:5000/login", {
-        email,
-        password,
-      });
+      // Updated URL to your Render backend
+      const response = await axios.post(
+        "https://mern-test-2.onrender.com/login",
+        {
+          email,
+          password,
+        }
+      );
 
       if (response.data.token) {
         localStorage.setItem("token", response.data.token);
