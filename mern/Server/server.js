@@ -11,9 +11,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Connect to MongoDB
+// Load environment variables with fallbacks
+const MONGODB_URI = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/plant_disease_db";
+const FLASK_URL = process.env.FLASK_URL || "http://127.0.0.1:5001";
+const GEMINI_URL = process.env.GEMINI_URL || "http://127.0.0.1:5002";
+const JWT_SECRET = process.env.JWT_SECRET || "secretkey";
+
+// Connect to MongoDB (using env-based URI)
 mongoose
-  .connect("mongodb://127.0.0.1:27017/plant_disease_db", {
+  .connect(MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
@@ -71,7 +77,7 @@ app.post("/login", async (req, res) => {
     }
     const token = jwt.sign(
       { userId: user._id },
-      process.env.JWT_SECRET || "secretkey",
+      JWT_SECRET,
       { expiresIn: "1h" }
     );
     res.json({ token });
@@ -86,7 +92,7 @@ const authenticateUser = (req, res, next) => {
   const token = req.headers.authorization;
   if (!token) return res.status(401).json({ message: "Access denied" });
 
-  jwt.verify(token, process.env.JWT_SECRET || "secretkey", (err, decoded) => {
+  jwt.verify(token, JWT_SECRET, (err, decoded) => {
     if (err) return res.status(401).json({ message: "Invalid token" });
     req.userId = decoded.userId;
     next();
@@ -106,16 +112,16 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
       return res.status(400).json({ message: "Image is required" });
     }
 
-    // Call Flask API for prediction
+    // Call Flask API for prediction (env-based URL)
     const flaskResponse = await axios.post(
-      "http://127.0.0.1:5001/predict",
+      `${FLASK_URL}/predict`,
       image.buffer,
       { headers: { "Content-Type": "application/octet-stream" } }
     );
     const status = flaskResponse.data.prediction;
 
-    // Call Gemini API to get recommendation
-    const geminiResponse = await axios.post("http://127.0.0.1:5002/gemini", {
+    // Call Gemini API to get recommendation (env-based URL)
+    const geminiResponse = await axios.post(`${GEMINI_URL}/gemini`, {
       status,
       plantType,
       waterFreq: parseInt(waterFreq, 10),
