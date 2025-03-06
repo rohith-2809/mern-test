@@ -1,4 +1,3 @@
-// Analyze.jsx
 import axios from "axios";
 import { motion } from "framer-motion";
 import React, { useEffect, useRef, useState } from "react";
@@ -90,7 +89,7 @@ const Analyze = () => {
     }
   };
 
-  // Updated handleAnalyze to call the prediction and recommendation endpoints
+  // Call your Node server on Render to analyze
   const handleAnalyze = async (e) => {
     e.preventDefault();
     setError("");
@@ -107,7 +106,7 @@ const Analyze = () => {
       return;
     }
 
-    // Prepare form data for the prediction endpoint
+    // Prepare form data for the Node /analyze endpoint
     const formData = new FormData();
     formData.append("image", image);
     formData.append("plantType", plantType);
@@ -116,9 +115,9 @@ const Analyze = () => {
 
     try {
       setLoading(true);
-      // Call the prediction endpoint on port 5002
-      const predictResponse = await axios.post(
-        "http://192.168.29.41:5002/predict",
+      // Replace this URL with your actual Render URL + /analyze
+      const response = await axios.post(
+        "https://mern-test-2.onrender.com/analyze",
         formData,
         {
           headers: {
@@ -127,35 +126,10 @@ const Analyze = () => {
           },
         }
       );
-      const predictionData = predictResponse.data;
 
-      // Prepare payload for the recommendation endpoint (agent)
-      const recPayload = {
-        username: "", // include username if available
-        status: predictionData.prediction,
-        plantType: plantType,
-        waterFreq: waterFreq,
-        language: language,
-      };
-
-      // Call the recommendation endpoint on port 5001
-      const recResponse = await axios.post(
-        "http://192.168.29.41:5001/recommend",
-        recPayload,
-        {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        }
-      );
-
-      // Combine both results
-      const finalResult = {
-        ...predictionData,
-        recommendation: recResponse.data.recommendation,
-      };
-
-      setResult(finalResult);
+      // The Node server returns { status, recommendation }
+      const { status, recommendation } = response.data;
+      setResult({ prediction: status, recommendation });
     } catch (err) {
       setError(
         err.response?.data?.error || "An error occurred while analyzing."
