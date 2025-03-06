@@ -22,8 +22,8 @@ const UserHistory = ({ onClose }) => {
       }
       setIsAuthenticated(true);
       try {
-        // Change localhost to your machine's IP:
-        const response = await axios.get("http://192.168.29.41:5000/history", {
+        // Use your deployed Node server URL on Render
+        const response = await axios.get("https://mern-test-2.onrender.com/history", {
           headers: { Authorization: token },
         });
         setUserHistory(response.data);
@@ -152,10 +152,7 @@ const UserHistory = ({ onClose }) => {
                           {isExpanded ? (
                             <FaChevronUp size={16} className="text-gray-600" />
                           ) : (
-                            <FaChevronDown
-                              size={16}
-                              className="text-gray-600"
-                            />
+                            <FaChevronDown size={16} className="text-gray-600" />
                           )}
                         </div>
                       </div>
