@@ -24,8 +24,9 @@ const Register = () => {
     e.preventDefault();
     setError("");
     try {
+      // Use your deployed Node server URL on Render
       const response = await axios.post(
-        "http://localhost:5000/register",
+        "https://mern-test-2.onrender.com/register",
         formData
       );
       console.log(response.data.message);
