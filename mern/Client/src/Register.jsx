@@ -13,9 +13,9 @@ const Register = () => {
   const [error, setError] = useState("");
 
   // Use the direct video URL as the initial video source
-  const [videoSrc, setVideoSrc] = useState(
-    "https://videos.pexels.com/video-files/30639174/13113894_360_640_25fps.mp4"
-  );
+  const fallbackVideoUrl = "https://videos.pexels.com/video-files/30639174/13113894_360_640_25fps.mp4";
+  const [videoSrc, setVideoSrc] = useState(fallbackVideoUrl);
+  const [videoLoadFailed, setVideoLoadFailed] = useState(false);
 
   // Update state on input change
   const handleChange = (e) => {
@@ -43,19 +43,21 @@ const Register = () => {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden">
-      {/* Background Video with fallback support */}
-      <video
-        autoPlay
-        loop
-        muted
-        className="absolute inset-0 w-full h-full object-cover"
-        onError={() =>
-          setVideoSrc("https://videos.pexels.com/video-files/30639174/13113894_360_640_25fps.mp4")
-        }
-      >
-        <source src={videoSrc} type="video/mp4" />
-        Your browser does not support the video tag.
-      </video>
+      {/* Background Video or fallback black background */}
+      {!videoLoadFailed ? (
+        <video
+          autoPlay
+          loop
+          muted
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          onError={() => setVideoLoadFailed(true)}
+        >
+          <source src={videoSrc} type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
+      ) : (
+        <div className="absolute inset-0 bg-black"></div>
+      )}
 
       {/* Dark Overlay for Readability */}
       <div className="absolute inset-0 bg-black opacity-60"></div>
