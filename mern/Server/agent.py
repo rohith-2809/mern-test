@@ -1,30 +1,27 @@
+import os
+import logging
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import google.generativeai as genai
-import logging
 from googletrans import Translator
 
 app = Flask(__name__)
 CORS(app)
 logging.basicConfig(level=logging.INFO)
 
-# Configure the Gemini API key (replace with your actual key)
-API_KEY = "AIzaSyAxy4VVllBtAvXKvH3KHxQsQXLH6D0ngd8"
+# Use environment variables for your Gemini API key
+API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyAxy4VVllBtAvXKvH3KHxQsQXLH6D0ngd8")
 genai.configure(api_key=API_KEY)
 
-# Initialize the translator and language mappings
 translator = Translator()
 LANGUAGE_MAP = {
     "english": "en",
     "telugu": "te",
     "hindi": "hi",
-    # add more mappings as needed
+    # Add more as needed
 }
 
 def get_cure_recommendation(username, status, plant_type, water_frequency):
-    """
-    Generates a fresh, personalized plant care recommendation.
-    """
     greeting = f"Dear {username}," if username else ""
     prompt = f"""
 {greeting}
@@ -59,7 +56,8 @@ Additional Instructions:
 Generate the personalized, engaging recommendation based on the above instructions.
     """
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model_name = os.environ.get("GEMINI_MODEL_NAME", "gemini-1.5-flash")
+        model = genai.GenerativeModel(model_name)
         response = model.generate_content(prompt)
         if hasattr(response, 'text') and response.text:
             return response.text.strip()
@@ -94,7 +92,6 @@ def gemini_recommendation():
 
     recommendation = get_cure_recommendation(username, status, plant_type, water_frequency)
 
-    # Translate recommendation if needed
     if language.lower() != "english":
         dest_lang = LANGUAGE_MAP.get(language.lower(), "en")
         try:
@@ -107,5 +104,20 @@ def gemini_recommendation():
     return jsonify({'recommendation': recommendation})
 
 if __name__ == '__main__':
-    # Run on port 5001 (adjust if needed)
-    app.run(host='0.0.0.0', port=5001, debug=True)
+    port = int(os.environ.get("PORT", 5001))
+    app.run(host='0.0.0.0', port=port, debug=True)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
