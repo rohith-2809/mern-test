@@ -24,9 +24,9 @@ const Register = () => {
     e.preventDefault();
     setError("");
     try {
-      // Use your deployed Node server URL on Render
+      // Updated URL to your Render backend for registration
       const response = await axios.post(
-        "https://mern-test-2.onrender.com/register",
+        "https://backend-lj86.onrender.com/register",
         formData
       );
       console.log(response.data.message);
