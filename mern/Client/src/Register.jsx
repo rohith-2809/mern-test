@@ -13,7 +13,7 @@ const Register = () => {
   const [error, setError] = useState("");
 
   // Use the direct video URL as the initial video source
-  const fallbackVideoUrl = "https://videos.pexels.com/video-files/30639174/13113894_360_640_25fps.mp4";
+  const fallbackVideoUrl = "https://www.pexels.com/video/close-up-of-a-plant-and-the-sunlight-8745490/";
   const [videoSrc, setVideoSrc] = useState(fallbackVideoUrl);
   const [videoLoadFailed, setVideoLoadFailed] = useState(false);
 
