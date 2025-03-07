@@ -155,6 +155,13 @@ def preprocess_and_augment_image(image_bytes):
         logging.error(f"Error in preprocessing: {e}")
         raise
 
+# ---------------------------------------------------------
+# ADD A SIMPLE ROOT ROUTE FOR RENDER / HEALTH CHECKS
+@app.route('/')
+def index():
+    return "Predict App is running. Use POST /predict to analyze an image."
+# ---------------------------------------------------------
+
 @app.route('/predict', methods=['POST', 'OPTIONS'])
 def predict():
     if request.method == 'OPTIONS':
@@ -233,7 +240,7 @@ def predict():
             multi_confidence = float(multi_avg[multi_pred_index])
             multi_confidence_interval = (
                 float(multi_avg[multi_pred_index] - multi_std[multi_pred_index]),
-                float(multi_avg[multi_pred_index] + multi_std[multi_std[multi_pred_index]])
+                float(multi_avg[multi_pred_index] + multi_std[multi_pred_index])
             )
             disease_prediction = [
                 "Guava_Canker",
