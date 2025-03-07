@@ -19,8 +19,10 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // State for video source with fallback support
-  const [videoSrc, setVideoSrc] = useState(backgroundVideo);
+  // Use the video URL directly as the initial video source
+  const [videoSrc, setVideoSrc] = useState(
+    "https://videos.pexels.com/video-files/8745490/8745490-hd_1080_1920_25fps.mp4"
+  );
 
   const submitHandler = async (e) => {
     e.preventDefault();
@@ -55,7 +57,7 @@ const Login = () => {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden">
-      {/* Background Video with fallback if asset fails */}
+      {/* Background Video with fallback support */}
       <video
         autoPlay
         loop
