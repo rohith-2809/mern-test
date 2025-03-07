@@ -22,8 +22,8 @@ const UserHistory = ({ onClose }) => {
       }
       setIsAuthenticated(true);
       try {
-        // Use your deployed Node server URL on Render
-        const response = await axios.get("https://mern-test-2.onrender.com/history", {
+        // Updated URL to your Render backend
+        const response = await axios.get("https://backend-lj86.onrender.com/history", {
           headers: { Authorization: token },
         });
         setUserHistory(response.data);
