@@ -195,8 +195,9 @@ export default function LandingPage() {
 
       import { Helmet } from "react-helmet";
 
+
 <Helmet>
-  {/* Basic and Standard Meta Tags */}
+  {/* Basic & Essential Meta Tags */}
   <meta charSet="utf-8" />
   <meta
     name="viewport"
@@ -227,7 +228,7 @@ export default function LandingPage() {
   <meta name="msapplication-config" content="/browserconfig.xml" />
   <meta name="msapplication-TileColor" content="#ffffff" />
 
-  {/* Open Graph Meta Tags */}
+  {/* Open Graph Meta Tags for Social Sharing */}
   <meta property="og:title" content="LeafGuard | AI Powered Plant Health" />
   <meta
     property="og:description"
@@ -261,7 +262,7 @@ export default function LandingPage() {
   <meta name="twitter:site" content="@LeafGuardAI" />
   <meta name="twitter:creator" content="@LeafGuardAI" />
 
-  {/* Canonical and Alternate Links */}
+  {/* Canonical & Alternate Links */}
   <link
     rel="canonical"
     href="https://mern-test-client.onrender.com"
@@ -282,6 +283,7 @@ export default function LandingPage() {
     rel="apple-touch-icon"
     href="https://mern-test-client.onrender.com/logo.jpg"
   />
+  <meta name="msapplication-TileImage" content="https://mern-test-client.onrender.com/logo.jpg" />
 
   {/* Structured Data (JSON-LD) */}
   <script type="application/ld+json">
@@ -304,7 +306,6 @@ export default function LandingPage() {
     })}
   </script>
 </Helmet>
-
       {/* SEO Meta Tags */}
      
 
