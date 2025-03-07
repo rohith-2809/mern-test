@@ -1,123 +1,226 @@
+
 import os
 import logging
+import traceback
+import io
+import numpy as np
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import google.generativeai as genai
-from googletrans import Translator
+import tensorflow as tf
+from PIL import Image, ImageEnhance, ImageOps
+
+# Configuration options (use environment variables for model paths, etc.)
+BINARY_MODEL_PATH = os.environ.get("BINARY_MODEL_PATH", "./pp2v2.keras")
+MULTI_MODEL_PATH = os.environ.get("MULTI_MODEL_PATH", "./pp5v6.keras")
+NORMALIZATION_MODE = os.environ.get("NORMALIZATION_MODE", "minus1_to_1")
+USE_TEMPERATURE_SCALING = os.environ.get("USE_TEMPERATURE_SCALING", "True").lower() == "true"
+TEMPERATURE = float(os.environ.get("TEMPERATURE", 2.0))
+NUM_AUGMENTATIONS = int(os.environ.get("NUM_AUGMENTATIONS", 5))
 
 app = Flask(__name__)
-CORS(app)
+CORS(app, supports_credentials=True)
 logging.basicConfig(level=logging.INFO)
 
-# Use environment variables for your Gemini API key
-API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyAxy4VVllBtAvXKvH3KHxQsQXLH6D0ngd8")
-genai.configure(api_key=API_KEY)
+# Attempt to load the binary classification model
+try:
+    binary_model = tf.keras.models.load_model(BINARY_MODEL_PATH)
+    logging.info(f"Binary model loaded successfully from {BINARY_MODEL_PATH}")
+except Exception as e:
+    logging.error(f"Binary model loading failed: {e}")
+    binary_model = None
 
-translator = Translator()
-LANGUAGE_MAP = {
-    "english": "en",
-    "telugu": "te",
-    "hindi": "hi",
-    # Add more as needed
-}
+# Attempt to load the multi-disease classification model
+try:
+    multi_model = tf.keras.models.load_model(MULTI_MODEL_PATH)
+    logging.info(f"Multi-disease model loaded successfully from {MULTI_MODEL_PATH}")
+except Exception as e:
+    logging.error(f"Multi-disease model loading failed: {e}")
+    multi_model = None
 
-def get_cure_recommendation(username, status, plant_type, water_frequency):
-    greeting = f"Dear {username}," if username else ""
-    prompt = f"""
-{greeting}
-You are a compassionate and knowledgeable plant care advisor. Based on the details provided below, please generate a personalized plant care recommendation that is completely fresh and unique each time.
+# Classes
+binary_classes = ["Diseased", "Healthy"]
+multi_disease_classes = [
+    "Guava_Canker",
+    "Guava_Dot",
+    "Guava_Mummification",
+    "Guava_Rust",
+    "Healty_plants",
+    "Money_plant_Bacterial_wilt_disease",
+    "Money_plant_Manganese Toxicity",
+    "Neem_Alternaria",
+    "Neem_Dieback",
+    "Neem_Leaf_Blight",
+    "Neem_Leaf_Miners",
+    "Neem_Leaf_Miners_Powdery_Mildew",
+    "Neem_Powdery_Mildew",
+    "Tomato___Bacterial_spot",
+    "Tomato___Early_blight",
+    "Tomato___Late_blight",
+    "Tomato___Leaf_Mold"
+]
 
-If the plant appears healthy:
-- Begin with a cheerful greeting.
-- Include a **new, never-repeated fun fact** about caring for a {plant_type}.
-- Recommend a maintenance fertilizer and include an online purchase link if possible.
-- Use upbeat language with plant-related emojis (e.g., 🌿, 🌸, 🍃).
+def softmax(x):
+    e_x = np.exp(x - np.max(x))
+    return e_x / e_x.sum()
 
-If the plant shows signs of disease or abnormality (for example, 'Guava_Dot', yellow leaves, spots, or drooping):
-- Begin with a gentle, empathetic concern using caution emojis (⚠️🚨).
-- Provide **5 concise, numbered steps** focusing on recovery and improved care.
-- Recommend at least **two specific fertilizers** (include brand names if possible) with direct online purchase links if available.
-- Suggest natural remedies or adjustments in the care routine.
-- Ensure the recovery advice is new and uniquely generated.
+def apply_temperature_scaling(logits, temperature):
+    return softmax(logits / temperature)
 
----------------------------
-User-Provided Details:
-- Plant Status: {status}
-- Plant Type: {plant_type}
-- Watering Frequency: Every {water_frequency} days
+def dynamic_crop(img):
+    gray = img.convert("L")
+    inverted = ImageOps.invert(gray)
+    bw = inverted.point(lambda x: 0 if x < 50 else 255, '1')
+    bbox = bw.getbbox()
+    if bbox:
+        return img.crop(bbox)
+    return img
 
-Additional Instructions:
-- Always generate a fresh and unique recommendation that feels new each time.
-- Avoid repeating phrases or identical wording from previous responses.
-- Keep the response engaging, concise, and no longer than 6 text lines.
-- Include fertilizer suggestions with online links where possible.
----------------------------
+def basic_augmentations(img):
+    augmented_images = []
+    # Original
+    augmented_images.append(img)
+    # Horizontal flip
+    augmented_images.append(img.transpose(Image.FLIP_LEFT_RIGHT))
+    # Rotate by 15 degrees
+    augmented_images.append(img.rotate(15))
+    # Rotate by -15 degrees
+    augmented_images.append(img.rotate(-15))
+    # Brightness enhancement
+    bright_enhancer = ImageEnhance.Brightness(img)
+    augmented_images.append(bright_enhancer.enhance(1.1))
+    # Contrast enhancement
+    contrast_enhancer = ImageEnhance.Contrast(img)
+    augmented_images.append(contrast_enhancer.enhance(1.1))
+    return augmented_images
 
-Generate the personalized, engaging recommendation based on the above instructions.
-    """
+def preprocess_and_augment_image(image_bytes):
     try:
-        model_name = os.environ.get("GEMINI_MODEL_NAME", "gemini-1.5-flash")
-        model = genai.GenerativeModel(model_name)
-        response = model.generate_content(prompt)
-        if hasattr(response, 'text') and response.text:
-            return response.text.strip()
-        else:
-            logging.error("Gemini API did not return a valid text response.")
-            return "The Gemini API did not return a valid response. Please try again later."
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        img = dynamic_crop(img)
+        width, height = img.size
+        min_dim = min(width, height)
+        left = (width - min_dim) // 2
+        top = (height - min_dim) // 2
+        img = img.crop((left, top, left + min_dim, top + min_dim))
+        img = img.resize((224, 224), Image.LANCZOS)
+        contrast_enhancer = ImageEnhance.Contrast(img)
+        img = contrast_enhancer.enhance(1.0)
+        brightness_enhancer = ImageEnhance.Brightness(img)
+        img = brightness_enhancer.enhance(1.0)
+        aug_images = basic_augmentations(img)
+
+        processed_images = []
+        for aug_img in aug_images:
+            img_array = np.array(aug_img, dtype=np.float32)
+            if NORMALIZATION_MODE == "minus1_to_1":
+                img_array = (img_array / 127.5) - 1.0
+            else:
+                img_array = img_array / 255.0
+            img_array = np.expand_dims(img_array, axis=0)
+            processed_images.append(img_array)
+
+        return processed_images
     except Exception as e:
-        logging.exception("Error generating recommendation")
-        return f"An error occurred while generating the recommendation: {str(e)}"
+        logging.error(f"Error in preprocessing: {e}")
+        raise
 
-@app.route('/recommend', methods=['POST'])
-def gemini_recommendation():
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'Invalid JSON payload'}), 400
+@app.route('/predict', methods=['POST', 'OPTIONS'])
+def predict():
+    if request.method == 'OPTIONS':
+        return jsonify({}), 200
 
-    username = data.get('username')
-    status = data.get('status')
-    plant_type = data.get('plantType')
-    water_frequency = data.get('waterFreq')
-    language = data.get('language', "english")
+    if binary_model is None or multi_model is None:
+        return jsonify({'error': 'One or more models are not loaded.'}), 500
 
-    missing_fields = []
-    if not status:
-        missing_fields.append("status")
-    if not plant_type:
-        missing_fields.append("plantType")
-    if not water_frequency:
-        missing_fields.append("waterFreq")
-    if missing_fields:
-        return jsonify({'error': f"Missing required parameter(s): {', '.join(missing_fields)}"}), 400
+    # Retrieve image from form data or raw request
+    if 'image' in request.files:
+        image_bytes = request.files['image'].read()
+    elif request.data:
+        image_bytes = request.data
+    else:
+        return jsonify({'error': 'No image provided'}), 400
 
-    recommendation = get_cure_recommendation(username, status, plant_type, water_frequency)
+    try:
+        processed_images = preprocess_and_augment_image(image_bytes)
+    except Exception as e:
+        return jsonify({'error': f'Image processing failed: {str(e)}'}), 500
 
-    if language.lower() != "english":
-        dest_lang = LANGUAGE_MAP.get(language.lower(), "en")
-        try:
-            translated = translator.translate(recommendation, dest=dest_lang)
-            recommendation = translated.text
-        except Exception as e:
-            logging.error(f"Translation error: {e}")
-            recommendation += "\n\n(Note: Translation to your selected language failed.)"
+    try:
+        binary_predictions = []
+        multi_predictions = []
 
-    return jsonify({'recommendation': recommendation})
+        for img in processed_images:
+            # Binary
+            binary_logits = np.array(binary_model.predict(img)[0])
+            if USE_TEMPERATURE_SCALING:
+                binary_probs = apply_temperature_scaling(binary_logits, TEMPERATURE)
+            else:
+                if not np.isclose(np.sum(binary_logits), 1.0, atol=1e-3):
+                    binary_probs = softmax(binary_logits)
+                else:
+                    binary_probs = binary_logits
+            binary_predictions.append(binary_probs)
+
+            # Multi
+            multi_logits = np.array(multi_model.predict(img)[0])
+            if not np.isclose(np.sum(multi_logits), 1.0, atol=1e-3):
+                multi_probs = softmax(multi_logits)
+            else:
+                multi_probs = multi_logits
+            multi_predictions.append(multi_probs)
+
+        # Ensemble
+        binary_avg = np.mean(binary_predictions, axis=0)
+        multi_avg = np.mean(multi_predictions, axis=0)
+        binary_std = np.std(binary_predictions, axis=0)
+        multi_std = np.std(multi_predictions, axis=0)
+
+        # Binary
+        binary_pred_index = np.argmax(binary_avg)
+        binary_confidence = float(binary_avg[binary_pred_index])
+        binary_confidence_interval = (
+            float(binary_avg[binary_pred_index] - binary_std[binary_pred_index]),
+            float(binary_avg[binary_pred_index] + binary_std[binary_pred_index])
+        )
+        binary_prediction = binary_classes[binary_pred_index]
+
+        logging.info(f"Binary ensemble avg: {binary_avg}, std: {binary_std}")
+        logging.info(f"Binary prediction: {binary_prediction} conf: {binary_confidence:.4f}")
+
+        HEALTHY_THRESHOLD = 0.5
+
+        if binary_prediction == "Healthy" and binary_confidence >= HEALTHY_THRESHOLD:
+            result = {
+                'prediction': "Healty_plants",
+                'confidence': binary_confidence,
+                'confidence_interval': binary_confidence_interval,
+                'model_used': "binary",
+                'binary_output': binary_avg.tolist()
+            }
+        else:
+            multi_pred_index = np.argmax(multi_avg)
+            multi_confidence = float(multi_avg[multi_pred_index])
+            multi_confidence_interval = (
+                float(multi_avg[multi_pred_index] - multi_std[multi_pred_index]),
+                float(multi_avg[multi_pred_index] + multi_std[multi_pred_index])
+            )
+            disease_prediction = multi_disease_classes[multi_pred_index]
+            result = {
+                'prediction': disease_prediction,
+                'confidence': multi_confidence,
+                'confidence_interval': multi_confidence_interval,
+                'binary_prediction': binary_prediction,
+                'binary_confidence': binary_confidence,
+                'binary_output': binary_avg.tolist(),
+                'multi_raw_output': multi_avg.tolist()
+            }
+
+        return jsonify(result)
+    except Exception as e:
+        logging.error("Prediction error: " + traceback.format_exc())
+        return jsonify({'error': 'Prediction failed: ' + str(e)}), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5001))
+    import os
+    port = int(os.environ.get("PORT", 5002))
     app.run(host='0.0.0.0', port=port, debug=True)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
