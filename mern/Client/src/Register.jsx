@@ -12,8 +12,10 @@ const Register = () => {
   });
   const [error, setError] = useState("");
 
-  // Video source state with fallback support
-  const [videoSrc, setVideoSrc] = useState(backgroundVideo);
+  // Use the direct video URL as the initial video source
+  const [videoSrc, setVideoSrc] = useState(
+    "https://videos.pexels.com/video-files/30639174/13113894_360_640_25fps.mp4"
+  );
 
   // Update state on input change
   const handleChange = (e) => {
@@ -41,16 +43,14 @@ const Register = () => {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden">
-      {/* Background Video with fallback if local asset fails */}
+      {/* Background Video with fallback support */}
       <video
         autoPlay
         loop
         muted
         className="absolute inset-0 w-full h-full object-cover"
         onError={() =>
-          setVideoSrc(
-            "https://videos.pexels.com/video-files/30639174/13113894_360_640_25fps.mp4"
-          )
+          setVideoSrc("https://videos.pexels.com/video-files/30639174/13113894_360_640_25fps.mp4")
         }
       >
         <source src={videoSrc} type="video/mp4" />
