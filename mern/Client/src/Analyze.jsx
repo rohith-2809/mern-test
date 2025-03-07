@@ -13,7 +13,7 @@ import { useNavigate } from "react-router-dom";
 import Webcam from "react-webcam";
 
 // Use the fallback video URL directly as the default background video
-const fallbackVideo = "https://videos.pexels.com/video-files/3522502/3522502-sd_360_640_30fps.mp4";
+const fallbackVideo = "https://www.pexels.com/video/crocus-flowers-swaying-with-the-wind-6914239/";
 
 const videoConstraints = {
   width: 1280,
