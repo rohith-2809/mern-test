@@ -19,16 +19,16 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Use the video URL directly as the initial video source
-  const [videoSrc, setVideoSrc] = useState(
-    "https://videos.pexels.com/video-files/8745490/8745490-hd_1080_1920_25fps.mp4"
-  );
+  // Use direct video URL as the initial background video
+  const initialVideoUrl =
+    "https://www.pexels.com/video/flowers-of-wild-grass-in-bloom-3522502/";
+  const [videoSrc, setVideoSrc] = useState(initialVideoUrl);
+  const [videoLoadFailed, setVideoLoadFailed] = useState(false);
 
   const submitHandler = async (e) => {
     e.preventDefault();
     setError("");
     setIsLoading(true);
-
     try {
       // Updated URL to your Render backend
       const response = await axios.post(
@@ -38,7 +38,6 @@ const Login = () => {
           password,
         }
       );
-
       if (response.data.token) {
         localStorage.setItem("token", response.data.token);
         navigate("/analyze");
@@ -57,20 +56,21 @@ const Login = () => {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden">
-      {/* Background Video with fallback support */}
-      <video
-        autoPlay
-        loop
-        muted
-        className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-        onError={() =>
-          setVideoSrc(
-            "https://videos.pexels.com/video-files/8745490/8745490-hd_1080_1920_25fps.mp4"
-          )
-        }
-      >
-        <source src={videoSrc} type="video/mp4" />
-      </video>
+      {/* Background Video or fallback black background */}
+      {!videoLoadFailed ? (
+        <video
+          autoPlay
+          loop
+          muted
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          onError={() => setVideoLoadFailed(true)}
+        >
+          <source src={videoSrc} type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
+      ) : (
+        <div className="absolute inset-0 bg-black"></div>
+      )}
 
       {/* Dark Overlay */}
       <div className="absolute inset-0 bg-black/60"></div>
