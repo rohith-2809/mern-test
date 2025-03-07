@@ -3,14 +3,26 @@ import logging
 import traceback
 import io
 import numpy as np
+import requests  # <-- For downloading from Hugging Face
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import tensorflow as tf
 from PIL import Image, ImageEnhance, ImageOps
 
-# Configuration options (use environment variables for model paths, etc.)
+# Hugging Face download links:
+BINARY_MODEL_URL = os.environ.get(
+    "BINARY_MODEL_URL",
+    "https://huggingface.co/vittamraj/predict-binary/resolve/main/pp2v2.keras"
+)
+MULTI_MODEL_URL = os.environ.get(
+    "MULTI_MODEL_URL",
+    "https://huggingface.co/vittamraj/predict-Multiclass/resolve/main/pp5v6.keras"
+)
+
+# Local file paths where we'll store the downloaded models
 BINARY_MODEL_PATH = os.environ.get("BINARY_MODEL_PATH", "./pp2v2.keras")
 MULTI_MODEL_PATH = os.environ.get("MULTI_MODEL_PATH", "./pp5v6.keras")
+
 NORMALIZATION_MODE = os.environ.get("NORMALIZATION_MODE", "minus1_to_1")
 USE_TEMPERATURE_SCALING = os.environ.get("USE_TEMPERATURE_SCALING", "True").lower() == "true"
 TEMPERATURE = float(os.environ.get("TEMPERATURE", 2.0))
@@ -20,7 +32,27 @@ app = Flask(__name__)
 CORS(app, supports_credentials=True)
 logging.basicConfig(level=logging.INFO)
 
-# Attempt to load the binary classification model
+def download_model_if_missing(url, local_path):
+    """
+    Download the model file from Hugging Face if it's not already present locally.
+    """
+    if not os.path.exists(local_path):
+        logging.info(f"Downloading {local_path} from {url} ...")
+        r = requests.get(url, stream=True)
+        r.raise_for_status()
+        with open(local_path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=8192):
+                f.write(chunk)
+        logging.info(f"Downloaded {local_path}")
+
+# 1) Download models if missing
+try:
+    download_model_if_missing(BINARY_MODEL_URL, BINARY_MODEL_PATH)
+    download_model_if_missing(MULTI_MODEL_URL, MULTI_MODEL_PATH)
+except Exception as e:
+    logging.error(f"Error downloading model files: {e}")
+
+# 2) Attempt to load the binary classification model
 try:
     binary_model = tf.keras.models.load_model(BINARY_MODEL_PATH)
     logging.info(f"Binary model loaded successfully from {BINARY_MODEL_PATH}")
@@ -28,7 +60,7 @@ except Exception as e:
     logging.error(f"Binary model loading failed: {e}")
     binary_model = None
 
-# Attempt to load the multi-disease classification model
+# 3) Attempt to load the multi-disease classification model
 try:
     multi_model = tf.keras.models.load_model(MULTI_MODEL_PATH)
     logging.info(f"Multi-disease model loaded successfully from {MULTI_MODEL_PATH}")
@@ -181,7 +213,7 @@ def predict():
             float(binary_avg[binary_pred_index] - binary_std[binary_pred_index]),
             float(binary_avg[binary_pred_index] + binary_std[binary_pred_index])
         )
-        binary_prediction = binary_classes[binary_pred_index]
+        binary_prediction = ["Diseased", "Healthy"][binary_pred_index]
 
         logging.info(f"Binary ensemble avg: {binary_avg}, std: {binary_std}")
         logging.info(f"Binary prediction: {binary_prediction} conf: {binary_confidence:.4f}")
@@ -201,9 +233,28 @@ def predict():
             multi_confidence = float(multi_avg[multi_pred_index])
             multi_confidence_interval = (
                 float(multi_avg[multi_pred_index] - multi_std[multi_pred_index]),
-                float(multi_avg[multi_pred_index] + multi_std[multi_pred_index])
+                float(multi_avg[multi_pred_index] + multi_std[multi_std[multi_pred_index]])
             )
-            disease_prediction = multi_disease_classes[multi_pred_index]
+            disease_prediction = [
+                "Guava_Canker",
+                "Guava_Dot",
+                "Guava_Mummification",
+                "Guava_Rust",
+                "Healty_plants",
+                "Money_plant_Bacterial_wilt_disease",
+                "Money_plant_Manganese Toxicity",
+                "Neem_Alternaria",
+                "Neem_Dieback",
+                "Neem_Leaf_Blight",
+                "Neem_Leaf_Miners",
+                "Neem_Leaf_Miners_Powdery_Mildew",
+                "Neem_Powdery_Mildew",
+                "Tomato___Bacterial_spot",
+                "Tomato___Early_blight",
+                "Tomato___Late_blight",
+                "Tomato___Leaf_Mold"
+            ][multi_pred_index]
+
             result = {
                 'prediction': disease_prediction,
                 'confidence': multi_confidence,
@@ -220,6 +271,5 @@ def predict():
         return jsonify({'error': 'Prediction failed: ' + str(e)}), 500
 
 if __name__ == '__main__':
-    import os
     port = int(os.environ.get("PORT", 5002))
     app.run(host='0.0.0.0', port=port, debug=True)
