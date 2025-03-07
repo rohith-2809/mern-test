@@ -10,7 +10,6 @@ import {
   FaUserPlus,
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
-import backgroundVideo from "./assets/3179187-hd_1920_1080_24fps.mp4";
 
 const Login = () => {
   const navigate = useNavigate();
