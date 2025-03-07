@@ -3,13 +3,14 @@ import logging
 import traceback
 import io
 import numpy as np
-import requests  # <-- For downloading from Hugging Face
+import requests
+import tempfile
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import tensorflow as tf
 from PIL import Image, ImageEnhance, ImageOps
 
-# Hugging Face download links:
+# Environment variables for model URLs
 BINARY_MODEL_URL = os.environ.get(
     "BINARY_MODEL_URL",
     "https://huggingface.co/vittamraj/predict-binary/resolve/main/pp2v2.keras"
@@ -19,10 +20,7 @@ MULTI_MODEL_URL = os.environ.get(
     "https://huggingface.co/vittamraj/predict-Multiclass/resolve/main/pp5v6.keras"
 )
 
-# Local file paths where we'll store the downloaded models
-BINARY_MODEL_PATH = os.environ.get("BINARY_MODEL_PATH", "./pp2v2.keras")
-MULTI_MODEL_PATH = os.environ.get("MULTI_MODEL_PATH", "./pp5v6.keras")
-
+# Other environment variables
 NORMALIZATION_MODE = os.environ.get("NORMALIZATION_MODE", "minus1_to_1")
 USE_TEMPERATURE_SCALING = os.environ.get("USE_TEMPERATURE_SCALING", "True").lower() == "true"
 TEMPERATURE = float(os.environ.get("TEMPERATURE", 2.0))
@@ -32,43 +30,37 @@ app = Flask(__name__)
 CORS(app, supports_credentials=True)
 logging.basicConfig(level=logging.INFO)
 
-def download_model_if_missing(url, local_path):
+def load_model_from_url(url: str) -> tf.keras.Model:
     """
-    Download the model file from Hugging Face if it's not already present locally.
+    Downloads a Keras model file from the given URL and loads it into memory.
     """
-    if not os.path.exists(local_path):
-        logging.info(f"Downloading {local_path} from {url} ...")
-        r = requests.get(url, stream=True)
-        r.raise_for_status()
-        with open(local_path, "wb") as f:
-            for chunk in r.iter_content(chunk_size=8192):
-                f.write(chunk)
-        logging.info(f"Downloaded {local_path}")
+    logging.info(f"Loading model from {url}...")
+    response = requests.get(url, stream=True)
+    response.raise_for_status()
 
-# 1) Download models if missing
-try:
-    download_model_if_missing(BINARY_MODEL_URL, BINARY_MODEL_PATH)
-    download_model_if_missing(MULTI_MODEL_URL, MULTI_MODEL_PATH)
-except Exception as e:
-    logging.error(f"Error downloading model files: {e}")
+    # Save to a temporary file, then load with tf.keras
+    with tempfile.NamedTemporaryFile(suffix=".keras") as tmp:
+        for chunk in response.iter_content(chunk_size=8192):
+            tmp.write(chunk)
+        tmp.flush()
+        model = tf.keras.models.load_model(tmp.name)
+    logging.info(f"Model loaded from {url}")
+    return model
 
-# 2) Attempt to load the binary classification model
+# Attempt to load the binary classification model from the environment variable URL
 try:
-    binary_model = tf.keras.models.load_model(BINARY_MODEL_PATH)
-    logging.info(f"Binary model loaded successfully from {BINARY_MODEL_PATH}")
+    binary_model = load_model_from_url(BINARY_MODEL_URL)
 except Exception as e:
     logging.error(f"Binary model loading failed: {e}")
     binary_model = None
 
-# 3) Attempt to load the multi-disease classification model
+# Attempt to load the multi-disease classification model from the environment variable URL
 try:
-    multi_model = tf.keras.models.load_model(MULTI_MODEL_PATH)
-    logging.info(f"Multi-disease model loaded successfully from {MULTI_MODEL_PATH}")
+    multi_model = load_model_from_url(MULTI_MODEL_URL)
 except Exception as e:
     logging.error(f"Multi-disease model loading failed: {e}")
     multi_model = None
 
-# Classes
 binary_classes = ["Diseased", "Healthy"]
 multi_disease_classes = [
     "Guava_Canker",
@@ -155,18 +147,16 @@ def preprocess_and_augment_image(image_bytes):
         logging.error(f"Error in preprocessing: {e}")
         raise
 
-# ---------------------------------------------------------
-# ADD A SIMPLE ROOT ROUTE FOR RENDER / HEALTH CHECKS
 @app.route('/')
 def index():
     return "Predict App is running. Use POST /predict to analyze an image."
-# ---------------------------------------------------------
 
 @app.route('/predict', methods=['POST', 'OPTIONS'])
 def predict():
     if request.method == 'OPTIONS':
         return jsonify({}), 200
 
+    # Ensure both models are loaded
     if binary_model is None or multi_model is None:
         return jsonify({'error': 'One or more models are not loaded.'}), 500
 
