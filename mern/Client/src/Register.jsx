@@ -2,7 +2,6 @@ import axios from "axios";
 import React, { useState } from "react";
 import { FaEnvelope, FaLock, FaTimes, FaUser } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
-import backgroundVideo from "./assets/3171572-hd_1080_1920_25fps (1).mp4";
 
 const Register = () => {
   const navigate = useNavigate();
