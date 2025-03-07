@@ -28,7 +28,7 @@ const Login = () => {
     try {
       // Updated URL to your Render backend
       const response = await axios.post(
-        "https://mern-test-2.onrender.com/login",
+        "https://backend-lj86.onrender.com/login",
         {
           email,
           password,
