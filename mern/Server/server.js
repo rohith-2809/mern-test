@@ -16,8 +16,9 @@ const MONGODB_URI =
   process.env.MONGODB_URI ||
   "mongodb+srv://myAppUser:890iopjklnm@plantdiseasedetection.uhd0o.mongodb.net/?retryWrites=true&w=majority&appName=Plantdiseasedetection";
 
-const FLASK_URL = process.env.FLASK_URL || "http://127.0.0.1:5001";
-const GEMINI_URL = process.env.GEMINI_URL || "http://127.0.0.1:5002";
+// Point to your deployed Flask endpoints
+const FLASK_URL = process.env.FLASK_URL || "https://predict-app-mawg.onrender.com";
+const GEMINI_URL = process.env.GEMINI_URL || "https://agent-app.onrender.com";
 const JWT_SECRET = process.env.JWT_SECRET || "secretkey";
 
 // Connect to MongoDB
@@ -45,6 +46,13 @@ const UserSchema = new mongoose.Schema({
 
 const User = mongoose.model("users", UserSchema);
 
+// ---------------------------------------------------------
+// ADD A SIMPLE ROOT ROUTE FOR HEALTH CHECKS / HOME PAGE
+app.get("/", (req, res) => {
+  res.send("Node server is running. Use /register, /login, /analyze, etc.");
+});
+// ---------------------------------------------------------
+
 // Registration endpoint
 app.post("/register", async (req, res) => {
   try {
@@ -62,7 +70,7 @@ app.post("/register", async (req, res) => {
     await user.save();
     res.json({ message: "✅ User registered successfully!" });
   } catch (error) {
-    console.error("Registration error details:", error); // More verbose error log
+    console.error("Registration error details:", error);
     console.error("Stack trace:", error.stack);
     res.status(500).json({ error: error.message });
   }
@@ -81,7 +89,7 @@ app.post("/login", async (req, res) => {
     const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: "1h" });
     res.json({ token });
   } catch (error) {
-    console.error("Login error details:", error); // More verbose error log
+    console.error("Login error details:", error);
     console.error("Stack trace:", error.stack);
     res.status(500).json({ error: error.message });
   }
@@ -94,7 +102,7 @@ const authenticateUser = (req, res, next) => {
 
   jwt.verify(token, JWT_SECRET, (err, decoded) => {
     if (err) {
-      console.error("JWT verification error:", err); // More verbose error log
+      console.error("JWT verification error:", err);
       return res.status(401).json({ message: "Invalid token" });
     }
     req.userId = decoded.userId;
@@ -115,14 +123,14 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
       return res.status(400).json({ message: "Image is required" });
     }
 
-    // Call Flask API for prediction
+    // Call the "predict" Flask API for prediction
     const flaskResponse = await axios.post(`${FLASK_URL}/predict`, image.buffer, {
       headers: { "Content-Type": "application/octet-stream" },
     });
     const status = flaskResponse.data.prediction;
 
-    // Call Gemini API to get recommendation
-    const geminiResponse = await axios.post(`${GEMINI_URL}/gemini`, {
+    // Call the "agent" Flask API to get recommendation
+    const geminiResponse = await axios.post(`${GEMINI_URL}/recommend`, {
       status,
       plantType,
       waterFreq: parseInt(waterFreq, 10),
@@ -133,7 +141,7 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
       recommendation: geminiResponse.data.recommendation,
     });
   } catch (error) {
-    console.error("Analyze error details:", error); // More verbose error log
+    console.error("Analyze error details:", error);
     console.error("Stack trace:", error.stack);
     res.status(500).json({ error: error.message });
   }
@@ -146,7 +154,7 @@ app.get("/history", authenticateUser, async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found" });
     res.json({ username: user.username, history: user.history });
   } catch (error) {
-    console.error("History error details:", error); // More verbose error log
+    console.error("History error details:", error);
     console.error("Stack trace:", error.stack);
     res.status(500).json({ error: error.message });
   }
