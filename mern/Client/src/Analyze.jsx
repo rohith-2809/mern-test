@@ -45,6 +45,9 @@ const Analyze = () => {
   const [useCamera, setUseCamera] = useState(false);
   const webcamRef = useRef(null);
 
+  // Video source state with fallback support
+  const [videoSrc, setVideoSrc] = useState(backgroundVideo);
+
   // Clean up preview URL when component unmounts or file changes
   useEffect(() => {
     return () => {
@@ -141,14 +144,19 @@ const Analyze = () => {
 
   return (
     <div className="relative min-h-screen font-sans">
-      {/* Background Video */}
+      {/* Background Video with fallback support */}
       <video
         autoPlay
         muted
         loop
         className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none"
+        onError={() =>
+          setVideoSrc(
+            "https://videos.pexels.com/video-files/3522502/3522502-sd_360_640_30fps.mp4"
+          )
+        }
       >
-        <source src={backgroundVideo} type="video/mp4" />
+        <source src={videoSrc} type="video/mp4" />
       </video>
 
       {/* Responsive Centered Content */}
