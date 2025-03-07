@@ -115,9 +115,9 @@ const Analyze = () => {
 
     try {
       setLoading(true);
-      // Replace this URL with your actual Render URL + /analyze
+      // Updated: use your Node backend at backend-lj86.onrender.com
       const response = await axios.post(
-        "https://mern-test-2.onrender.com/analyze",
+        "https://backend-lj86.onrender.com/analyze",
         formData,
         {
           headers: {
