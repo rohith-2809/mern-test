@@ -68,6 +68,13 @@ Generate the personalized, engaging recommendation based on the above instructio
         logging.exception("Error generating recommendation")
         return f"An error occurred while generating the recommendation: {str(e)}"
 
+# ---------------------------------------------------------
+# ADD A SIMPLE ROOT ROUTE FOR RENDER / HEALTH CHECKS
+@app.route('/')
+def index():
+    return "Agent App is running. Use POST /recommend for recommendations."
+# ---------------------------------------------------------
+
 @app.route('/recommend', methods=['POST'])
 def gemini_recommendation():
     data = request.get_json()
