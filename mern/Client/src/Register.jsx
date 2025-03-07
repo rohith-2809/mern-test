@@ -13,6 +13,9 @@ const Register = () => {
   });
   const [error, setError] = useState("");
 
+  // Video source state with fallback support
+  const [videoSrc, setVideoSrc] = useState(backgroundVideo);
+
   // Update state on input change
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -24,7 +27,7 @@ const Register = () => {
     e.preventDefault();
     setError("");
     try {
-      // Updated URL to your Render backend for registration
+      // Use your deployed Node server URL on Render
       const response = await axios.post(
         "https://backend-lj86.onrender.com/register",
         formData
@@ -39,14 +42,19 @@ const Register = () => {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden">
-      {/* Background Video */}
+      {/* Background Video with fallback if local asset fails */}
       <video
         autoPlay
         loop
         muted
         className="absolute inset-0 w-full h-full object-cover"
+        onError={() =>
+          setVideoSrc(
+            "https://videos.pexels.com/video-files/30639174/13113894_360_640_25fps.mp4"
+          )
+        }
       >
-        <source src={backgroundVideo} type="video/mp4" />
+        <source src={videoSrc} type="video/mp4" />
         Your browser does not support the video tag.
       </video>
 
