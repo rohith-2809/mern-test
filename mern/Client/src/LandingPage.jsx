@@ -191,30 +191,122 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-emerald-200 text-gray-800 font-roboto relative">
       {/* SEO Meta Tags */}
+
+
+      import { Helmet } from "react-helmet";
+
+<Helmet>
+  {/* Basic and Standard Meta Tags */}
+  <meta charSet="utf-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"
+  />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <title>LeafGuard | AI Powered Plant Health</title>
+  <meta
+    name="description"
+    content="LeafGuard uses AI to detect, diagnose, and prevent plant diseases. Get expert insights and protect your garden."
+  />
+  <meta
+    name="keywords"
+    content="AI plant disease detection, garden health, plant care, LeafGuard AI, plant disease prevention, smart gardening, AI for plants, crop health monitoring"
+  />
+  <meta name="robots" content="index, follow" />
+  <meta name="author" content="LeafGuard Team" />
+  <meta name="language" content="English" />
+  <meta name="revisit-after" content="7 days" />
+  <meta name="format-detection" content="telephone=no,email=no,address=no" />
+  <meta name="theme-color" content="#ffffff" />
+
+  {/* Advanced Mobile & App Meta Tags */}
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="LeafGuard" />
+  <meta name="application-name" content="LeafGuard" />
+  <meta name="msapplication-config" content="/browserconfig.xml" />
+  <meta name="msapplication-TileColor" content="#ffffff" />
+
+  {/* Open Graph Meta Tags */}
+  <meta property="og:title" content="LeafGuard | AI Powered Plant Health" />
+  <meta
+    property="og:description"
+    content="AI-powered plant disease detection for healthier gardens."
+  />
+  <meta
+    property="og:image"
+    content="https://mern-test-client.onrender.com/logo.jpg"
+  />
+  <meta property="og:type" content="website" />
+  <meta
+    property="og:url"
+    content="https://mern-test-client.onrender.com"
+  />
+  <meta property="og:site_name" content="LeafGuard" />
+  <meta property="og:locale" content="en_US" />
+  <meta property="fb:app_id" content="YOUR_FB_APP_ID" />
+
+  {/* Twitter Card Meta Tags */}
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="LeafGuard | AI Powered Plant Health" />
+  <meta
+    name="twitter:description"
+    content="AI-powered plant disease detection for healthier gardens."
+  />
+  <meta
+    name="twitter:image"
+    content="https://mern-test-client.onrender.com/logo.jpg"
+  />
+  <meta name="twitter:image:alt" content="LeafGuard logo banner" />
+  <meta name="twitter:site" content="@LeafGuardAI" />
+  <meta name="twitter:creator" content="@LeafGuardAI" />
+
+  {/* Canonical and Alternate Links */}
+  <link
+    rel="canonical"
+    href="https://mern-test-client.onrender.com"
+  />
+  <link
+    rel="alternate"
+    href="https://mern-test-client.onrender.com"
+    hreflang="en-us"
+  />
+
+  {/* Favicon and Touch Icons */}
+  <link
+    rel="icon"
+    href="https://mern-test-client.onrender.com/logo.jpg"
+    type="image/jpeg"
+  />
+  <link
+    rel="apple-touch-icon"
+    href="https://mern-test-client.onrender.com/logo.jpg"
+  />
+
+  {/* Structured Data (JSON-LD) */}
+  <script type="application/ld+json">
+    {JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "LeafGuard",
+      "url": "https://mern-test-client.onrender.com",
+      "description":
+        "LeafGuard uses AI to detect, diagnose, and prevent plant diseases. Get expert insights and protect your garden.",
+      "image": "https://mern-test-client.onrender.com/logo.jpg",
+      "publisher": {
+        "@type": "Organization",
+        "name": "LeafGuard Team",
+        "logo": {
+          "@type": "ImageObject",
+          "url": "https://mern-test-client.onrender.com/logo.jpg"
+        }
+      }
+    })}
+  </script>
+</Helmet>
+
       {/* SEO Meta Tags */}
-      <Helmet>
-        <title>LeafGuard | AI Powered Plant Health</title>
-        <meta
-          name="description"
-          content="LeafGuard uses AI to detect, diagnose, and prevent plant diseases. Get expert insights and protect your garden."
-        />
-        <meta
-          property="og:title"
-          content="LeafGuard | AI Powered Plant Health"
-        />
-        <meta
-          property="og:description"
-          content="AI-powered plant disease detection for healthier gardens."
-        />
-        <meta property="og:image" content="/plant-image.jpg" />
-        <meta property="og:type" content="website" />
-        <meta
-          name="keywords"
-          content="AI plant disease detection, garden health, plant care, LeafGuard AI"
-        />
-        <meta name="robots" content="index, follow" />
-        <meta name="author" content="LeafGuard Team" />
-      </Helmet>
+     
 
       {/* Navbar */}
       <nav
