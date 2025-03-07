@@ -11,7 +11,9 @@ import {
 } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import Webcam from "react-webcam";
-import backgroundVideo from "./assets/13185762_3840_2160_24fps.mp4";
+
+// Use the fallback video URL directly as the default background video
+const fallbackVideo = "https://videos.pexels.com/video-files/3522502/3522502-sd_360_640_30fps.mp4";
 
 const videoConstraints = {
   width: 1280,
@@ -45,8 +47,8 @@ const Analyze = () => {
   const [useCamera, setUseCamera] = useState(false);
   const webcamRef = useRef(null);
 
-  // Video source state with fallback support
-  const [videoSrc, setVideoSrc] = useState(backgroundVideo);
+  // Video source state, initialized with the fallback URL
+  const [videoSrc, setVideoSrc] = useState(fallbackVideo);
 
   // Clean up preview URL when component unmounts or file changes
   useEffect(() => {
@@ -144,17 +146,15 @@ const Analyze = () => {
 
   return (
     <div className="relative min-h-screen font-sans">
-      {/* Background Video with fallback support */}
+      {/* Background Video */}
       <video
         autoPlay
         muted
         loop
         className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none"
-        onError={() =>
-          setVideoSrc(
-            "https://videos.pexels.com/video-files/3522502/3522502-sd_360_640_30fps.mp4"
-          )
-        }
+        onError={() => {
+          console.error("Video failed to load");
+        }}
       >
         <source src={videoSrc} type="video/mp4" />
       </video>
@@ -263,13 +263,7 @@ const Analyze = () => {
                     className="cursor-pointer flex items-center justify-center p-2 border border-gray-300 rounded-md text-center hover:bg-blue-50 transition"
                   >
                     <span className="truncate max-w-[160px] overflow-hidden text-ellipsis whitespace-nowrap flex items-center justify-center">
-                      {image ? (
-                        image.name
-                      ) : (
-                        <>
-                          <FaImages className="mr-2" /> Gallery
-                        </>
-                      )}
+                      {image ? image.name : (<><FaImages className="mr-2" /> Gallery</>)}
                     </span>
                   </label>
                   <input
@@ -388,7 +382,6 @@ const Analyze = () => {
               <p className="text-gray-700 whitespace-pre-wrap leading-relaxed mb-2">
                 {result.recommendation || "No recommendation provided."}
               </p>
-              {/* If a disease is detected, encourage the user to browse cure links */}
               {result.prediction !== "Healty_plants" && (
                 <motion.button
                   onClick={() => navigate(`/cure-links/${result.prediction}`)}
