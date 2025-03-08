@@ -61,14 +61,15 @@ def preprocess_image(image_bytes):
 
 @app.route('/')
 def index():
-    return "Analyze API is running. Use POST /analyze to analyze an image."
+    return "Predict API is running. Use POST /predict to analyze an image."
 
-@app.route('/analyze', methods=['POST', 'OPTIONS'])
-def analyze():
+# Updated endpoint: using "/predict" so that POST requests to /predict work.
+@app.route('/predict', methods=['POST', 'OPTIONS'])
+def predict():
     if request.method == 'OPTIONS':
         return jsonify({}), 200
 
-    # Retrieve additional form fields from the frontend (analyze.jsx)
+    # Retrieve additional form fields from the frontend (if any)
     plant_type = request.form.get("plantType", "unknown")
     water_freq = request.form.get("waterFreq", "unknown")
     language = request.form.get("language", "english")
@@ -95,7 +96,7 @@ def analyze():
             tmp_path = tmp.name
 
         # Call the binary API first.
-        # Note: Updated parameter name from "input_data" to "image" so the binary API gets the image file.
+        # Using the parameter name "image" so that the remote API gets the image file.
         binary_result = binary_client.predict(
             image=handle_file(tmp_path),
             api_name="/predict"
@@ -122,7 +123,7 @@ def analyze():
                 f"Consider adjusting your care routine. Water frequency: {water_freq} days. (Language: {language})"
             )
 
-        # Return response with a structure matching what your analyze.jsx expects.
+        # Return response with a structure matching what your frontend expects.
         return jsonify({
             "status": status,
             "recommendation": recommendation
