@@ -2,6 +2,5 @@ Flask==2.3.3
 Werkzeug==2.3.7
 Flask-Cors==3.0.10
 tensorflow==2.18.0
-keras==2.18.0
 numpy==1.23.5
 Pillow==9.4.0
