@@ -7,21 +7,35 @@ from googletrans import Translator
 
 app = Flask(__name__)
 CORS(app)
+
+# Set logging to INFO level to see our debug messages
 logging.basicConfig(level=logging.INFO)
 
-# Use environment variables for your Gemini API key
-API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyAxy4VVllBtAvXKvH3KHxQsQXLH6D0ngd8")
+# 1. Retrieve your Gemini API key from Render's environment variables
+API_KEY = os.environ.get("GEMINI_API_KEY")
+
+# 2. Log whether the key is present (avoid printing the entire key)
+if API_KEY:
+    logging.info("GEMINI_API_KEY is set.")
+else:
+    logging.warning("GEMINI_API_KEY is NOT set. Using fallback or may fail.")
+
+# 3. Configure google.generativeai with the retrieved key
 genai.configure(api_key=API_KEY)
 
 translator = Translator()
+
 LANGUAGE_MAP = {
     "english": "en",
     "telugu": "te",
     "hindi": "hi",
-    # Add more as needed
+    # Add more languages if needed
 }
 
 def get_cure_recommendation(username, status, plant_type, water_frequency):
+    """
+    Generate a plant-care recommendation using the Gemini model.
+    """
     greeting = f"Dear {username}," if username else ""
     prompt = f"""
 {greeting}
@@ -56,10 +70,14 @@ Additional Instructions:
 Generate the personalized, engaging recommendation based on the above instructions.
     """
     try:
+        # Use gemini-1.5-flash by default, or read from environment if needed
         model_name = os.environ.get("GEMINI_MODEL_NAME", "gemini-1.5-flash")
-        model = genai.GenerativeModel(model_name)
-        response = model.generate_content(prompt)
-        if hasattr(response, 'text') and response.text:
+
+        # 4. Call the updated generate_text method
+        response = genai.generate_text(prompt=prompt, model=model_name)
+
+        # 5. Check the response for valid text
+        if response and response.text:
             return response.text.strip()
         else:
             logging.error("Gemini API did not return a valid text response.")
@@ -69,7 +87,7 @@ Generate the personalized, engaging recommendation based on the above instructio
         return f"An error occurred while generating the recommendation: {str(e)}"
 
 # ---------------------------------------------------------
-# ADD A SIMPLE ROOT ROUTE FOR RENDER / HEALTH CHECKS
+# ROOT ROUTE (HEALTH CHECK)
 @app.route('/')
 def index():
     return "Agent App is running. Use POST /recommend for recommendations."
@@ -77,6 +95,16 @@ def index():
 
 @app.route('/recommend', methods=['POST'])
 def gemini_recommendation():
+    """
+    Receives a JSON payload with:
+    {
+        "username": <string, optional>,
+        "status": <string>,
+        "plantType": <string>,
+        "waterFreq": <int>,
+        "language": <string, optional>
+    }
+    """
     data = request.get_json()
     if not data:
         return jsonify({'error': 'Invalid JSON payload'}), 400
@@ -87,18 +115,24 @@ def gemini_recommendation():
     water_frequency = data.get('waterFreq')
     language = data.get('language', "english")
 
+    # Check for missing fields
     missing_fields = []
     if not status:
         missing_fields.append("status")
     if not plant_type:
         missing_fields.append("plantType")
-    if not water_frequency:
+    if water_frequency is None:
         missing_fields.append("waterFreq")
-    if missing_fields:
-        return jsonify({'error': f"Missing required parameter(s): {', '.join(missing_fields)}"}), 400
 
+    if missing_fields:
+        return jsonify({
+            'error': f"Missing required parameter(s): {', '.join(missing_fields)}"
+        }), 400
+
+    # Generate recommendation
     recommendation = get_cure_recommendation(username, status, plant_type, water_frequency)
 
+    # If language is not English, attempt translation
     if language.lower() != "english":
         dest_lang = LANGUAGE_MAP.get(language.lower(), "en")
         try:
@@ -111,5 +145,6 @@ def gemini_recommendation():
     return jsonify({'recommendation': recommendation})
 
 if __name__ == '__main__':
+    # If you're deploying on Render, it will set PORT automatically.
     port = int(os.environ.get("PORT", 5001))
     app.run(host='0.0.0.0', port=port, debug=True)
