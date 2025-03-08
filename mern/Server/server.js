@@ -8,7 +8,16 @@ const bcrypt = require("bcrypt");
 require("dotenv").config();
 
 const app = express();
-app.use(cors());
+
+// Configure CORS to allow requests from your frontend domain
+const corsOptions = {
+  origin: "https://mern-test-client.onrender.com", // Adjust if needed or use "*" for all origins (not recommended for production)
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+  credentials: true,
+  optionsSuccessStatus: 200,
+};
+app.use(cors(corsOptions));
+
 app.use(express.json());
 
 // Replace the local URI with your Atlas connection string
@@ -117,9 +126,6 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 // Analyze Endpoint
-// This endpoint receives an image and additional form fields,
-// calls the external Flask predict API and the agent recommendation API,
-// and returns a combined response.
 app.post("/analyze", upload.single("image"), async (req, res) => {
   console.log("Received /analyze request");
   try {
