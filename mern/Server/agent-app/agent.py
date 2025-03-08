@@ -34,7 +34,7 @@ LANGUAGE_MAP = {
 
 def get_cure_recommendation(username, status, plant_type, water_frequency):
     """
-    Generate a plant-care recommendation using the Gemini model.
+    Generate a plant-care recommendation using the generative AI model.
     """
     greeting = f"Dear {username}," if username else ""
     prompt = f"""
@@ -70,8 +70,9 @@ Additional Instructions:
 Generate the personalized, engaging recommendation based on the above instructions.
     """
     try:
-        # Use gemini-1.5-flash by default, or read from environment if needed
-        model_name = os.environ.get("GEMINI_MODEL_NAME", "gemini-1.5-flash")
+        # Use a supported model name.
+        # This will use the value of GEMINI_MODEL_NAME if set, or default to "models/text-bison-001"
+        model_name = os.environ.get("GEMINI_MODEL_NAME", "models/text-bison-001")
 
         # 4. Call the updated generate_text method
         response = genai.generate_text(prompt=prompt, model=model_name)
@@ -80,8 +81,8 @@ Generate the personalized, engaging recommendation based on the above instructio
         if response and response.text:
             return response.text.strip()
         else:
-            logging.error("Gemini API did not return a valid text response.")
-            return "The Gemini API did not return a valid response. Please try again later."
+            logging.error("Generative AI did not return a valid text response.")
+            return "The API did not return a valid response. Please try again later."
     except Exception as e:
         logging.exception("Error generating recommendation")
         return f"An error occurred while generating the recommendation: {str(e)}"
