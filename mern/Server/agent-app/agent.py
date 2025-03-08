@@ -9,7 +9,7 @@ app = Flask(__name__)
 CORS(app)
 logging.basicConfig(level=logging.INFO)
 
-# Retrieve your API key from the environment (e.g. set in Render as GEMINI_API_KEY)
+# Retrieve your API key from the environment (e.g., set in Render as GEMINI_API_KEY)
 API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
     raise ValueError("GEMINI_API_KEY environment variable is not set.")
@@ -64,9 +64,9 @@ Additional Instructions:
 Generate the personalized, engaging recommendation based on the above instructions.
     """
     try:
-        # Use the Gemini 1.5 Flash model from the supported models list
+        # Use the Gemini 1.5 Flash model (using correct model name format)
         response = genai.generate_text(
-            model="models/gemini-1.5-flash",
+            model="gemini-1.5-flash",
             prompt=prompt,
             temperature=0.7,
             candidate_count=1,
