@@ -124,6 +124,7 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 // Analyze Endpoint
+
 // Analyze Endpoint
 app.post("/analyze", upload.single("image"), async (req, res) => {
   console.log("Received /analyze request");
@@ -159,15 +160,16 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
       } else {
         throw new Error("No prediction returned from predict API");
       }
-    } else if (flaskResponse.data.prediction) {
-      status = flaskResponse.data.prediction;
     } else {
-      throw new Error("No prediction returned from predict API");
+      // Try both lower-case and capitalized keys
+      status = flaskResponse.data.prediction || flaskResponse.data.Prediction;
+      if (!status) {
+        throw new Error("No prediction returned from predict API");
+      }
     }
     console.log("Status (prediction):", status);
 
-    // Call the recommendation (agent) API.
-    // If this call fails, we will return a fallback recommendation message.
+    // Call the recommendation (agent) API with proper JSON header.
     const geminiEndpoint = `${GEMINI_URL}/recommend`;
     console.log("Calling recommendation API at:", geminiEndpoint);
     let recommendation;
@@ -191,7 +193,6 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
     }
 
     // Return the combined response to the frontend.
-    // Note: We're returning the key "prediction" so the frontend displays it.
     res.json({
       prediction: status,
       recommendation,
@@ -204,6 +205,7 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
 });
 
 
+// Analyze Endpoint
 // Get user history (Protected endpoint)
 app.get("/history", authenticateUser, async (req, res) => {
   try {
