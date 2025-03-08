@@ -11,16 +11,15 @@ CORS(app)
 # Set logging to INFO level to see our debug messages
 logging.basicConfig(level=logging.INFO)
 
-# 1. Retrieve your API key from Render's environment variables
+# Retrieve your API key from Render's environment variables
 API_KEY = os.environ.get("GEMINI_API_KEY")
 
-# 2. Log whether the key is present (avoid printing the entire key)
 if API_KEY:
     logging.info("GEMINI_API_KEY is set.")
 else:
     logging.warning("GEMINI_API_KEY is NOT set. Using fallback or may fail.")
 
-# 3. Configure google.generativeai with the retrieved key
+# Configure the generative AI library with the API key
 genai.configure(api_key=API_KEY)
 
 translator = Translator()
@@ -70,14 +69,12 @@ Additional Instructions:
 Generate the personalized, engaging recommendation based on the above instructions.
     """
     try:
-        # Use a supported model name.
-        # This will use the value of GEMINI_MODEL_NAME if set, or default to "text-bison-001"
+        # Use the value of GEMINI_MODEL_NAME if set, or default to "text-bison-001"
         model_name = os.environ.get("GEMINI_MODEL_NAME", "text-bison-001")
 
-        # Call the updated generate_text method
+        # Call the generate_text method with the valid model name
         response = genai.generate_text(prompt=prompt, model=model_name)
 
-        # Check the response for valid text
         if response and response.text:
             return response.text.strip()
         else:
@@ -87,12 +84,9 @@ Generate the personalized, engaging recommendation based on the above instructio
         logging.exception("Error generating recommendation")
         return f"An error occurred while generating the recommendation: {str(e)}"
 
-# ---------------------------------------------------------
-# ROOT ROUTE (HEALTH CHECK)
 @app.route('/')
 def index():
     return "Agent App is running. Use POST /recommend for recommendations."
-# ---------------------------------------------------------
 
 @app.route('/recommend', methods=['POST'])
 def gemini_recommendation():
@@ -116,7 +110,6 @@ def gemini_recommendation():
     water_frequency = data.get('waterFreq')
     language = data.get('language', "english")
 
-    # Check for missing fields
     missing_fields = []
     if not status:
         missing_fields.append("status")
@@ -126,14 +119,10 @@ def gemini_recommendation():
         missing_fields.append("waterFreq")
 
     if missing_fields:
-        return jsonify({
-            'error': f"Missing required parameter(s): {', '.join(missing_fields)}"
-        }), 400
+        return jsonify({'error': f"Missing required parameter(s): {', '.join(missing_fields)}"}), 400
 
-    # Generate recommendation
     recommendation = get_cure_recommendation(username, status, plant_type, water_frequency)
 
-    # If language is not English, attempt translation
     if language.lower() != "english":
         dest_lang = LANGUAGE_MAP.get(language.lower(), "en")
         try:
@@ -146,6 +135,5 @@ def gemini_recommendation():
     return jsonify({'recommendation': recommendation})
 
 if __name__ == '__main__':
-    # If you're deploying on Render, it will set PORT automatically.
     port = int(os.environ.get("PORT", 5001))
     app.run(host='0.0.0.0', port=port, debug=True)
