@@ -7,34 +7,25 @@ from googletrans import Translator
 
 app = Flask(__name__)
 CORS(app)
-
-# Set logging to INFO level to see our debug messages
 logging.basicConfig(level=logging.INFO)
 
-# Retrieve your API key from Render's environment variables
+# Retrieve your API key from environment variables
 API_KEY = os.environ.get("GEMINI_API_KEY")
-
 if API_KEY:
     logging.info("GEMINI_API_KEY is set.")
 else:
     logging.warning("GEMINI_API_KEY is NOT set. Using fallback or may fail.")
 
-# Configure the generative AI library with the API key
 genai.configure(api_key=API_KEY)
-
 translator = Translator()
 
 LANGUAGE_MAP = {
     "english": "en",
     "telugu": "te",
     "hindi": "hi",
-    # Add more languages if needed
 }
 
 def get_cure_recommendation(username, status, plant_type, water_frequency):
-    """
-    Generate a plant-care recommendation using the generative AI model.
-    """
     greeting = f"Dear {username}," if username else ""
     prompt = f"""
 {greeting}
@@ -46,10 +37,10 @@ If the plant appears healthy:
 - Recommend a maintenance fertilizer and include an online purchase link if possible.
 - Use upbeat language with plant-related emojis (e.g., 🌿, 🌸, 🍃).
 
-If the plant shows signs of disease or abnormality (for example, 'Guava_Dot', yellow leaves, spots, or drooping):
+If the plant shows signs of disease or abnormality:
 - Begin with a gentle, empathetic concern using caution emojis (⚠️🚨).
 - Provide **5 concise, numbered steps** focusing on recovery and improved care.
-- Recommend at least **two specific fertilizers** (include brand names if possible) with direct online purchase links if available.
+- Recommend at least **two specific fertilizers** with direct online purchase links if available.
 - Suggest natural remedies or adjustments in the care routine.
 - Ensure the recovery advice is new and uniquely generated.
 
@@ -60,21 +51,21 @@ User-Provided Details:
 - Watering Frequency: Every {water_frequency} days
 
 Additional Instructions:
-- Always generate a fresh and unique recommendation that feels new each time.
-- Avoid repeating phrases or identical wording from previous responses.
-- Keep the response engaging, concise, and no longer than 6 text lines.
-- Include fertilizer suggestions with online links where possible.
+- Always generate a fresh and unique recommendation.
+- Avoid repeating phrases from previous responses.
+- Keep the response engaging and concise.
 ---------------------------
 
 Generate the personalized, engaging recommendation based on the above instructions.
     """
     try:
-        # Use the value of GEMINI_MODEL_NAME if set, or default to "text-bison-001"
-        model_name = os.environ.get("GEMINI_MODEL_NAME", "text-bison-001")
-
-        # Call the generate_text method with the valid model name
+        # Use the fully qualified model name by default.
+        # Replace 'my-project' with your actual Google Cloud project ID.
+        model_name = os.environ.get(
+            "GEMINI_MODEL_NAME",
+            "projects/my-project/locations/us-central1/models/text-bison-001"
+        )
         response = genai.generate_text(prompt=prompt, model=model_name)
-
         if response and response.text:
             return response.text.strip()
         else:
@@ -90,16 +81,6 @@ def index():
 
 @app.route('/recommend', methods=['POST'])
 def gemini_recommendation():
-    """
-    Receives a JSON payload with:
-    {
-        "username": <string, optional>,
-        "status": <string>,
-        "plantType": <string>,
-        "waterFreq": <int>,
-        "language": <string, optional>
-    }
-    """
     data = request.get_json()
     if not data:
         return jsonify({'error': 'Invalid JSON payload'}), 400
@@ -117,12 +98,10 @@ def gemini_recommendation():
         missing_fields.append("plantType")
     if water_frequency is None:
         missing_fields.append("waterFreq")
-
     if missing_fields:
         return jsonify({'error': f"Missing required parameter(s): {', '.join(missing_fields)}"}), 400
 
     recommendation = get_cure_recommendation(username, status, plant_type, water_frequency)
-
     if language.lower() != "english":
         dest_lang = LANGUAGE_MAP.get(language.lower(), "en")
         try:
