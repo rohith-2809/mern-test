@@ -88,16 +88,16 @@ def analyze():
         return jsonify({'error': f'Image preprocessing failed: {str(e)}'}), 500
 
     try:
-        # Save the pre-processed image to a temporary file
+        # Save the pre-processed image to a temporary file.
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
             preprocessed_img.save(tmp, format="PNG")
             tmp.flush()
             tmp_path = tmp.name
 
         # Call the binary API first.
-        # (If your binary API expects a file input, you might need to use the parameter name "image" instead of "input_data".)
+        # Note: Updated parameter name from "input_data" to "image" so the binary API gets the image file.
         binary_result = binary_client.predict(
-            input_data=handle_file(tmp_path),
+            image=handle_file(tmp_path),
             api_name="/predict"
         )
         logging.info(f"Binary API result: {binary_result}")
