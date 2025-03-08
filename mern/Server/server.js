@@ -127,8 +127,8 @@ const upload = multer({ storage });
 app.post("/analyze", upload.single("image"), async (req, res) => {
   console.log("Received /analyze request");
   try {
-    // Retrieve form fields
-    const { plantType, waterFreq } = req.body;
+    // Retrieve form fields from the request body
+    const { plantType, waterFreq, language } = req.body;
     const image = req.file;
     if (!image) {
       console.error("No image provided in the request");
@@ -146,27 +146,34 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
     );
     console.log("Predict API raw response:", flaskResponse.data);
 
-    // Determine prediction:
+    // Extract prediction from the response.
     let status;
     if (typeof flaskResponse.data === "string") {
-      // Try to extract using a regular expression
+      // Use a regex to parse a string response like:
+      // "Prediction: Diseased (Confidence: 0.0020)"
       const regex = /Prediction:\s*([A-Za-z0-9_]+)\s*\(Confidence:\s*([\d.]+)\)/i;
       const match = regex.exec(flaskResponse.data);
       if (match) {
         status = match[1];
         console.log("Parsed prediction from string:", status);
+      } else {
+        console.warn("No prediction parsed from string; using fallback 'Unknown'");
+        status = "Unknown";
       }
     } else {
-      // Try both lower-case and capitalized keys
-      status = flaskResponse.data.prediction || flaskResponse.data.Prediction;
-    }
-    if (!status) {
-      console.warn("No prediction returned from predict API; using fallback 'Unknown'");
-      status = "Unknown";
+      // If the response is JSON, check multiple keys
+      status =
+        flaskResponse.data.prediction ||
+        flaskResponse.data.Prediction ||
+        flaskResponse.data.status;
+      if (!status) {
+        console.warn("No prediction found in JSON; using fallback 'Unknown'");
+        status = "Unknown";
+      }
     }
     console.log("Status (prediction):", status);
 
-    // Call the recommendation (agent) API
+    // Call the recommendation (agent) API.
     const geminiEndpoint = `${GEMINI_URL}/recommend`;
     console.log("Calling recommendation API at:", geminiEndpoint);
     let recommendation;
@@ -177,10 +184,9 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
           status,
           plantType,
           waterFreq: parseInt(waterFreq, 10),
+          language,
         },
-        {
-          headers: { "Content-Type": "application/json" },
-        }
+        { headers: { "Content-Type": "application/json" } }
       );
       console.log("Recommendation API response:", geminiResponse.data);
       recommendation = geminiResponse.data.recommendation;
@@ -200,6 +206,7 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 // Analyze Endpoint
 // Get user history (Protected endpoint)
