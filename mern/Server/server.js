@@ -17,8 +17,10 @@ const MONGODB_URI =
   "mongodb+srv://myAppUser:890iopjklnm@plantdiseasedetection.uhd0o.mongodb.net/?retryWrites=true&w=majority&appName=Plantdiseasedetection";
 
 // Set external endpoints from environment variables
-const FLASK_URL = process.env.FLASK_URL || "https://predict-app-mawg.onrender.com";
-const GEMINI_URL = process.env.GEMINI_URL || "https://agent-app.onrender.com";
+const FLASK_URL =
+  process.env.FLASK_URL || "https://predict-app-mawg.onrender.com";
+const GEMINI_URL =
+  process.env.GEMINI_URL || "https://agent-app.onrender.com";
 const JWT_SECRET = process.env.JWT_SECRET || "secretkey";
 
 // Connect to MongoDB
@@ -119,15 +121,15 @@ const upload = multer({ storage });
 // calls the external Flask predict API and the agent recommendation API,
 // and returns a combined response.
 app.post("/analyze", upload.single("image"), async (req, res) => {
+  console.log("Received /analyze request");
   try {
     // Retrieve form fields
     const { plantType, waterFreq } = req.body;
     const image = req.file;
     if (!image) {
+      console.error("No image provided in the request");
       return res.status(400).json({ message: "Image is required" });
     }
-
-    console.log("Received /analyze request:");
     console.log("Plant Type:", plantType, "Water Frequency:", waterFreq);
 
     // Call the predict Flask API
