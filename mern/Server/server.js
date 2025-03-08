@@ -124,6 +124,7 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 // Analyze Endpoint
+// Analyze Endpoint
 app.post("/analyze", upload.single("image"), async (req, res) => {
   console.log("Received /analyze request");
   try {
@@ -146,9 +147,10 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
     );
     console.log("Predict API response:", flaskResponse.data);
 
-    // Determine prediction: if response is a string, parse it; else use the JSON field
+    // Determine prediction:
     let status;
     if (typeof flaskResponse.data === "string") {
+      // If response is a string, try to extract prediction via regex
       const regex = /Prediction:\s*([A-Za-z0-9_]+)\s*\(Confidence:\s*([\d.]+)\)/i;
       const match = regex.exec(flaskResponse.data);
       if (match) {
@@ -164,26 +166,35 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
     }
     console.log("Status (prediction):", status);
 
-    // Call the recommendation (agent) API with proper JSON header
+    // Call the recommendation (agent) API.
+    // If this call fails, we will return a fallback recommendation message.
     const geminiEndpoint = `${GEMINI_URL}/recommend`;
     console.log("Calling recommendation API at:", geminiEndpoint);
-    const geminiResponse = await axios.post(
-      geminiEndpoint,
-      {
-        status,
-        plantType,
-        waterFreq: parseInt(waterFreq, 10),
-      },
-      {
-        headers: { "Content-Type": "application/json" },
-      }
-    );
-    console.log("Recommendation API response:", geminiResponse.data);
+    let recommendation;
+    try {
+      const geminiResponse = await axios.post(
+        geminiEndpoint,
+        {
+          status,
+          plantType,
+          waterFreq: parseInt(waterFreq, 10),
+        },
+        {
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+      console.log("Recommendation API response:", geminiResponse.data);
+      recommendation = geminiResponse.data.recommendation;
+    } catch (agentError) {
+      console.error("Error fetching recommendation:", agentError.message);
+      recommendation = "Sorry, cure recommendations are not available right now.";
+    }
 
-    // Return the combined response to the frontend
+    // Return the combined response to the frontend.
+    // Note: We're returning the key "prediction" so the frontend displays it.
     res.json({
-      status,
-      recommendation: geminiResponse.data.recommendation,
+      prediction: status,
+      recommendation,
     });
   } catch (error) {
     console.error("Analyze error details:", error.message);
@@ -191,6 +202,7 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 
 // Get user history (Protected endpoint)
 app.get("/history", authenticateUser, async (req, res) => {
