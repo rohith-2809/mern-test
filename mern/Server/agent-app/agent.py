@@ -1,58 +1,79 @@
-import os
-import logging
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import google.generativeai as genai
+import logging
+import os
 from googletrans import Translator
 
 app = Flask(__name__)
 CORS(app)
 logging.basicConfig(level=logging.INFO)
 
-API_KEY = os.environ.get("GEMINI_API_KEY")
-if API_KEY:
-    logging.info("GEMINI_API_KEY is set.")
-else:
-    logging.warning("GEMINI_API_KEY is NOT set. Using fallback or may fail.")
+# Retrieve the Gemini API key from environment variables (Render's "Environment Variables")
+API_KEY = os.getenv("GEMINI_API_KEY")
+if not API_KEY:
+    raise ValueError("GEMINI_API_KEY environment variable is not set.")
 
-# Configure the Generative AI library
+# Configure the Gemini API
 genai.configure(api_key=API_KEY)
 
+# Initialize the translator and language mappings
 translator = Translator()
-
 LANGUAGE_MAP = {
     "english": "en",
     "telugu": "te",
     "hindi": "hi",
+    # add more mappings as needed
 }
 
 def get_cure_recommendation(username, status, plant_type, water_frequency):
+    """
+    Generates a fresh, personalized plant care recommendation.
+    """
     greeting = f"Dear {username}," if username else ""
     prompt = f"""
 {greeting}
-You are a compassionate and knowledgeable plant care advisor...
-(etc.)
+You are a compassionate and knowledgeable plant care advisor. Based on the details provided below, please generate a personalized plant care recommendation that is completely fresh and unique each time.
+
+If the plant appears healthy:
+- Begin with a cheerful greeting.
+- Include a **new, never-repeated fun fact** about caring for a {plant_type}.
+- Recommend a maintenance fertilizer and include an online purchase link if possible.
+- Use upbeat language with plant-related emojis (e.g., 🌿, 🌸, 🍃).
+
+If the plant shows signs of disease or abnormality (for example, 'Guava_Dot', yellow leaves, spots, or drooping):
+- Begin with a gentle, empathetic concern using caution emojis (⚠️🚨).
+- Provide **5 concise, numbered steps** focusing on recovery and improved care.
+- Recommend at least **two specific fertilizers** (include brand names if possible) with direct online purchase links if available.
+- Suggest natural remedies or adjustments in the care routine.
+- Ensure the recovery advice is new and uniquely generated.
+
+---------------------------
+User-Provided Details:
+- Plant Status: {status}
+- Plant Type: {plant_type}
+- Watering Frequency: Every {water_frequency} days
+
+Additional Instructions:
+- Always generate a fresh and unique recommendation that feels new each time.
+- Avoid repeating phrases or identical wording from previous responses.
+- Keep the response engaging, concise, and no longer than 6 text lines.
+- Include fertilizer suggestions with online links where possible.
+---------------------------
+
+Generate the personalized, engaging recommendation based on the above instructions.
     """
     try:
-        # Use your numeric project ID in the model path:
-        default_model = "projects/530092692805/locations/us-central1/models/text-bison-001"
-
-        model_name = os.environ.get("GEMINI_MODEL_NAME", default_model)
-
-        response = genai.generate_text(prompt=prompt, model=model_name)
-
-        if response and response.text:
+        model = genai.GenerativeModel("gemini-1.5-flash")
+        response = model.generate_content(prompt)
+        if hasattr(response, 'text') and response.text:
             return response.text.strip()
         else:
-            logging.error("Generative AI did not return a valid text response.")
-            return "The API did not return a valid response. Please try again later."
+            logging.error("Gemini API did not return a valid text response.")
+            return "The Gemini API did not return a valid response. Please try again later."
     except Exception as e:
         logging.exception("Error generating recommendation")
         return f"An error occurred while generating the recommendation: {str(e)}"
-
-@app.route('/')
-def index():
-    return "Agent App is running. Use POST /recommend for recommendations."
 
 @app.route('/recommend', methods=['POST'])
 def gemini_recommendation():
@@ -66,21 +87,19 @@ def gemini_recommendation():
     water_frequency = data.get('waterFreq')
     language = data.get('language', "english")
 
-    # Validate fields
     missing_fields = []
     if not status:
         missing_fields.append("status")
     if not plant_type:
         missing_fields.append("plantType")
-    if water_frequency is None:
+    if not water_frequency:
         missing_fields.append("waterFreq")
     if missing_fields:
-        return jsonify({'error': f"Missing parameter(s): {', '.join(missing_fields)}"}), 400
+        return jsonify({'error': f"Missing required parameter(s): {', '.join(missing_fields)}"}), 400
 
-    # Generate recommendation
     recommendation = get_cure_recommendation(username, status, plant_type, water_frequency)
 
-    # Optionally translate if not English
+    # Translate recommendation if needed
     if language.lower() != "english":
         dest_lang = LANGUAGE_MAP.get(language.lower(), "en")
         try:
@@ -93,5 +112,5 @@ def gemini_recommendation():
     return jsonify({'recommendation': recommendation})
 
 if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5001))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    # Run on port 5001 (adjust if needed)
+    app.run(host='0.0.0.0', port=5001, debug=True)
