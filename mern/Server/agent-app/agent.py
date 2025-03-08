@@ -9,12 +9,12 @@ app = Flask(__name__)
 CORS(app)
 logging.basicConfig(level=logging.INFO)
 
-# Retrieve the Gemini API key from environment variables (Render's "Environment Variables")
+# Retrieve your API key from the environment (e.g. set in Render as GEMINI_API_KEY)
 API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
     raise ValueError("GEMINI_API_KEY environment variable is not set.")
 
-# Configure the Gemini API
+# Configure the Gemini API with your API key
 genai.configure(api_key=API_KEY)
 
 # Initialize the translator and language mappings
@@ -28,7 +28,7 @@ LANGUAGE_MAP = {
 
 def get_cure_recommendation(username, status, plant_type, water_frequency):
     """
-    Generates a fresh, personalized plant care recommendation.
+    Generates a fresh, personalized plant care recommendation using Gemini 1.5 Flash.
     """
     greeting = f"Dear {username}," if username else ""
     prompt = f"""
@@ -64,10 +64,17 @@ Additional Instructions:
 Generate the personalized, engaging recommendation based on the above instructions.
     """
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
-        response = model.generate_content(prompt)
-        if hasattr(response, 'text') and response.text:
-            return response.text.strip()
+        # Use the Gemini 1.5 Flash model from the supported models list
+        response = genai.generate_text(
+            model="models/gemini-1.5-flash",
+            prompt=prompt,
+            temperature=0.7,
+            candidate_count=1,
+            top_k=40,
+            top_p=0.95,
+        )
+        if response.result:
+            return response.result.strip()
         else:
             logging.error("Gemini API did not return a valid text response.")
             return "The Gemini API did not return a valid response. Please try again later."
@@ -99,7 +106,7 @@ def gemini_recommendation():
 
     recommendation = get_cure_recommendation(username, status, plant_type, water_frequency)
 
-    # Translate recommendation if needed
+    # Translate recommendation if the request language is not English
     if language.lower() != "english":
         dest_lang = LANGUAGE_MAP.get(language.lower(), "en")
         try:
