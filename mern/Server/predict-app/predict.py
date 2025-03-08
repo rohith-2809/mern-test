@@ -5,6 +5,7 @@ import logging
 import traceback
 import io
 import tempfile
+import re
 import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -59,11 +60,26 @@ def preprocess_image(image_bytes):
     except Exception as e:
         raise Exception("Preprocessing error: " + str(e))
 
+def parse_result(result):
+    """
+    Parse the result from the API if it is a string.
+    Expected format: "Prediction: <class> (Confidence: <confidence>)"
+    Returns a tuple: (prediction, confidence)
+    """
+    # Use regular expression to extract prediction and confidence.
+    match = re.search(r"Prediction:\s*(\w+)\s*\(Confidence:\s*([\d\.]+)\)", result)
+    if match:
+        prediction = match.group(1)
+        confidence = float(match.group(2))
+        return prediction, confidence
+    else:
+        # Fallback: return the string as prediction with confidence 0
+        return result, 0
+
 @app.route('/')
 def index():
     return "Predict API is running. Use POST /predict to analyze an image."
 
-# Updated endpoint: using "/predict" so that POST requests to /predict work.
 @app.route('/predict', methods=['POST', 'OPTIONS'])
 def predict():
     if request.method == 'OPTIONS':
@@ -96,15 +112,19 @@ def predict():
             tmp_path = tmp.name
 
         # Call the binary API first.
-        # Using the parameter name "image" so that the remote API gets the image file.
+        # Updated to use the parameter name "image".
         binary_result = binary_client.predict(
             image=handle_file(tmp_path),
             api_name="/predict"
         )
         logging.info(f"Binary API result: {binary_result}")
 
-        binary_prediction = binary_result.get("prediction")
-        binary_confidence = binary_result.get("confidence", 0)
+        # Check if the result is a string; if so, parse it.
+        if isinstance(binary_result, str):
+            binary_prediction, binary_confidence = parse_result(binary_result)
+        else:
+            binary_prediction = binary_result.get("prediction")
+            binary_confidence = binary_result.get("confidence", 0)
 
         # If the binary API predicts healthy with high confidence, return that result.
         if binary_prediction == "Healthy" and binary_confidence >= HEALTHY_THRESHOLD:
@@ -117,7 +137,10 @@ def predict():
                 api_name="/predict"
             )
             logging.info(f"Multiclass API result: {multi_result}")
-            status = multi_result.get("prediction", "Unknown")
+            if isinstance(multi_result, str):
+                status, _ = parse_result(multi_result)
+            else:
+                status = multi_result.get("prediction", "Unknown")
             recommendation = (
                 f"Your {plant_type} shows signs of {status}. "
                 f"Consider adjusting your care routine. Water frequency: {water_freq} days. (Language: {language})"
