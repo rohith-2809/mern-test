@@ -8,7 +8,7 @@ import tempfile
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import tensorflow as tf  # <-- Import TensorFlow
-from keras.models import load_model  # <-- Import Keras load_model
+from tensorflow.keras.models import load_model  # ✅ USE THIS INSTEAD
 from PIL import Image, ImageEnhance, ImageOps
 
 # Environment variables for model URLs
