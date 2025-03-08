@@ -11,7 +11,7 @@ CORS(app)
 # Set logging to INFO level to see our debug messages
 logging.basicConfig(level=logging.INFO)
 
-# 1. Retrieve your Gemini API key from Render's environment variables
+# 1. Retrieve your API key from Render's environment variables
 API_KEY = os.environ.get("GEMINI_API_KEY")
 
 # 2. Log whether the key is present (avoid printing the entire key)
@@ -71,13 +71,13 @@ Generate the personalized, engaging recommendation based on the above instructio
     """
     try:
         # Use a supported model name.
-        # This will use the value of GEMINI_MODEL_NAME if set, or default to "models/text-bison-001"
-        model_name = os.environ.get("GEMINI_MODEL_NAME", "models/text-bison-001")
+        # This will use the value of GEMINI_MODEL_NAME if set, or default to "text-bison-001"
+        model_name = os.environ.get("GEMINI_MODEL_NAME", "text-bison-001")
 
-        # 4. Call the updated generate_text method
+        # Call the updated generate_text method
         response = genai.generate_text(prompt=prompt, model=model_name)
 
-        # 5. Check the response for valid text
+        # Check the response for valid text
         if response and response.text:
             return response.text.strip()
         else:
