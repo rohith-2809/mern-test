@@ -16,7 +16,7 @@ const MONGODB_URI =
   process.env.MONGODB_URI ||
   "mongodb+srv://myAppUser:890iopjklnm@plantdiseasedetection.uhd0o.mongodb.net/?retryWrites=true&w=majority&appName=Plantdiseasedetection";
 
-// Point to your deployed Flask endpoints
+// Set external endpoints from environment variables
 const FLASK_URL = process.env.FLASK_URL || "https://predict-app-mawg.onrender.com";
 const GEMINI_URL = process.env.GEMINI_URL || "https://agent-app.onrender.com";
 const JWT_SECRET = process.env.JWT_SECRET || "secretkey";
@@ -47,7 +47,7 @@ const UserSchema = new mongoose.Schema({
 const User = mongoose.model("users", UserSchema);
 
 // ---------------------------------------------------------
-// ADD A SIMPLE ROOT ROUTE FOR HEALTH CHECKS / HOME PAGE
+// ROOT/HEALTH CHECK ROUTE
 app.get("/", (req, res) => {
   res.send("Node server is running. Use /register, /login, /analyze, etc.");
 });
@@ -110,15 +110,66 @@ const authenticateUser = (req, res, next) => {
   });
 };
 
-// Set up Multer for image uploads
+// Set up Multer for image uploads (using memory storage)
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// Analyze Endpoint (Authentication Removed)
-const status = flaskResponse.data.status;
+// Analyze Endpoint
+// This endpoint receives an image and additional form fields,
+// calls the external Flask predict API and the agent recommendation API,
+// and returns a combined response.
+app.post("/analyze", upload.single("image"), async (req, res) => {
+  try {
+    // Retrieve form fields
+    const { plantType, waterFreq } = req.body;
+    const image = req.file;
+    if (!image) {
+      return res.status(400).json({ message: "Image is required" });
+    }
 
+    console.log("Received /analyze request:");
+    console.log("Plant Type:", plantType, "Water Frequency:", waterFreq);
 
-// Get user history (Protected)
+    // Call the predict Flask API
+    const flaskEndpoint = `${FLASK_URL}/predict`;
+    console.log("Calling predict API at:", flaskEndpoint);
+    const flaskResponse = await axios.post(
+      flaskEndpoint,
+      image.buffer,
+      { headers: { "Content-Type": "application/octet-stream" } }
+    );
+    console.log("Predict API response:", flaskResponse.data);
+
+    // Use the 'prediction' field from the predict API response as the status
+    const status = flaskResponse.data.prediction;
+    if (!status) {
+      throw new Error("No prediction returned from predict API");
+    }
+    console.log("Status (prediction):", status);
+
+    // Call the recommendation (agent) API
+    const geminiEndpoint = `${GEMINI_URL}/recommend`;
+    console.log("Calling recommendation API at:", geminiEndpoint);
+    const geminiResponse = await axios.post(geminiEndpoint, {
+      status,
+      plantType,
+      waterFreq: parseInt(waterFreq, 10),
+    });
+    console.log("Recommendation API response:", geminiResponse.data);
+
+    // Return the combined response to the frontend
+    res.json({
+      status,
+      recommendation: geminiResponse.data.recommendation,
+    });
+  } catch (error) {
+    console.error("Analyze error details:", error.message);
+    console.error("Stack trace:", error.stack);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get user history (Protected endpoint)
 app.get("/history", authenticateUser, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
@@ -131,7 +182,7 @@ app.get("/history", authenticateUser, async (req, res) => {
   }
 });
 
-// Start the server on 0.0.0.0
+// Start the server on 0.0.0.0 with the specified port
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Server running at http://0.0.0.0:${PORT}`);
