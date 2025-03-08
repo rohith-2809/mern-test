@@ -115,37 +115,8 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 // Analyze Endpoint (Authentication Removed)
-app.post("/analyze", upload.single("image"), async (req, res) => {
-  try {
-    const { plantType, waterFreq } = req.body;
-    const image = req.file;
-    if (!image) {
-      return res.status(400).json({ message: "Image is required" });
-    }
+const status = flaskResponse.data.status;
 
-    // Call the "predict" Flask API for prediction
-    const flaskResponse = await axios.post(`${FLASK_URL}/predict`, image.buffer, {
-      headers: { "Content-Type": "application/octet-stream" },
-    });
-    const status = flaskResponse.data.prediction;
-
-    // Call the "agent" Flask API to get recommendation
-    const geminiResponse = await axios.post(`${GEMINI_URL}/recommend`, {
-      status,
-      plantType,
-      waterFreq: parseInt(waterFreq, 10),
-    });
-
-    res.json({
-      status,
-      recommendation: geminiResponse.data.recommendation,
-    });
-  } catch (error) {
-    console.error("Analyze error details:", error);
-    console.error("Stack trace:", error.stack);
-    res.status(500).json({ error: error.message });
-  }
-});
 
 // Get user history (Protected)
 app.get("/history", authenticateUser, async (req, res) => {
