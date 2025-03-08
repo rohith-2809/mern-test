@@ -120,7 +120,7 @@ const Analyze = () => {
 
     try {
       setLoading(true);
-      // Updated: use your Node backend at backend-lj86.onrender.com
+      // Use your Node backend URL
       const response = await axios.post(
         "https://backend-lj86.onrender.com/analyze",
         formData,
@@ -131,10 +131,9 @@ const Analyze = () => {
           },
         }
       );
-
-      // The Node server returns { status, recommendation }
-      const { status, recommendation } = response.data;
-      setResult({ prediction: status, recommendation });
+      // The backend returns { prediction, recommendation }
+      const { prediction, recommendation } = response.data;
+      setResult({ prediction, recommendation });
     } catch (err) {
       setError(
         err.response?.data?.error || "An error occurred while analyzing."
