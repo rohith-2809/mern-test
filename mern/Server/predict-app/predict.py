@@ -7,7 +7,8 @@ import requests
 import tempfile
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import tensorflow as tf
+import tensorflow as tf  # <-- Import TensorFlow
+from keras.models import load_model  # <-- Import Keras load_model
 from PIL import Image, ImageEnhance, ImageOps
 
 # Environment variables for model URLs
@@ -30,37 +31,39 @@ app = Flask(__name__)
 CORS(app, supports_credentials=True)
 logging.basicConfig(level=logging.INFO)
 
-def load_model_from_url(url: str) -> tf.keras.Model:
+def load_model_from_url(url: str):
     """
-    Downloads a Keras model file from the given URL and loads it into memory.
+    Downloads a Keras model file from the given URL and loads it into memory
+    without saving it permanently to disk.
     """
     logging.info(f"Loading model from {url}...")
     response = requests.get(url, stream=True)
     response.raise_for_status()
 
-    # Save to a temporary file, then load with tf.keras
+    # Save to a temporary file, then load with Keras
     with tempfile.NamedTemporaryFile(suffix=".keras") as tmp:
         for chunk in response.iter_content(chunk_size=8192):
             tmp.write(chunk)
         tmp.flush()
-        model = tf.keras.models.load_model(tmp.name)
+        model = load_model(tmp.name)
     logging.info(f"Model loaded from {url}")
     return model
 
-# Attempt to load the binary classification model from the environment variable URL
+# Attempt to load the binary classification model
 try:
     binary_model = load_model_from_url(BINARY_MODEL_URL)
 except Exception as e:
     logging.error(f"Binary model loading failed: {e}")
     binary_model = None
 
-# Attempt to load the multi-disease classification model from the environment variable URL
+# Attempt to load the multi-disease classification model
 try:
     multi_model = load_model_from_url(MULTI_MODEL_URL)
 except Exception as e:
     logging.error(f"Multi-disease model loading failed: {e}")
     multi_model = None
 
+# Class labels
 binary_classes = ["Diseased", "Healthy"]
 multi_disease_classes = [
     "Guava_Canker",
@@ -178,8 +181,11 @@ def predict():
         multi_predictions = []
 
         for img in processed_images:
-            # Binary
-            binary_logits = np.array(binary_model.predict(img)[0])
+            # Use TensorFlow for array manipulation, if desired
+            img_tensor = tf.convert_to_tensor(img, dtype=tf.float32)
+
+            # Binary prediction
+            binary_logits = np.array(binary_model.predict(img_tensor)[0])
             if USE_TEMPERATURE_SCALING:
                 binary_probs = apply_temperature_scaling(binary_logits, TEMPERATURE)
             else:
@@ -189,8 +195,8 @@ def predict():
                     binary_probs = binary_logits
             binary_predictions.append(binary_probs)
 
-            # Multi
-            multi_logits = np.array(multi_model.predict(img)[0])
+            # Multi prediction
+            multi_logits = np.array(multi_model.predict(img_tensor)[0])
             if not np.isclose(np.sum(multi_logits), 1.0, atol=1e-3):
                 multi_probs = softmax(multi_logits)
             else:
