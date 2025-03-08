@@ -19,11 +19,15 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  // Use direct video URL as the initial background video
+  // Video and fallback image URLs
   const initialVideoUrl =
     "https://www.pexels.com/video/flowers-of-wild-grass-in-bloom-3522502/";
+  const fallbackImageUrl =
+    "https://images.pexels.com/photos/30162510/pexels-photo-30162510/free-photo-of-lush-green-fern-leaves-in-xilitla-jungle.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2";
+
   const [videoSrc, setVideoSrc] = useState(initialVideoUrl);
   const [videoLoadFailed, setVideoLoadFailed] = useState(false);
+  const [imageLoadFailed, setImageLoadFailed] = useState(false);
 
   const submitHandler = async (e) => {
     e.preventDefault();
@@ -56,7 +60,7 @@ const Login = () => {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden">
-      {/* Background Video or fallback black background */}
+      {/* Background: Video, fallback Image, or Gradient */}
       {!videoLoadFailed ? (
         <video
           autoPlay
@@ -68,8 +72,20 @@ const Login = () => {
           <source src={videoSrc} type="video/mp4" />
           Your browser does not support the video tag.
         </video>
+      ) : !imageLoadFailed ? (
+        <img
+          src={fallbackImageUrl}
+          alt="Background fallback"
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+          onError={() => setImageLoadFailed(true)}
+        />
       ) : (
-        <div className="absolute inset-0 bg-black"></div>
+        <div
+          className="absolute inset-0"
+          style={{
+            background: "linear-gradient(135deg, #003025, #002b2c)",
+          }}
+        />
       )}
 
       {/* Dark Overlay */}
