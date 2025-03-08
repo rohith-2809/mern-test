@@ -9,9 +9,9 @@ require("dotenv").config();
 
 const app = express();
 
-// Configure CORS to allow requests from your frontend domain
+// Configure CORS to allow your client domain
 const corsOptions = {
-  origin: "https://mern-test-client.onrender.com", // Adjust if needed or use "*" for all origins (not recommended for production)
+  origin: "https://mern-test-client.onrender.com", // adjust as needed
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   credentials: true,
   optionsSuccessStatus: 200,
@@ -31,6 +31,8 @@ const FLASK_URL =
 const GEMINI_URL =
   process.env.GEMINI_URL || "https://agent-app.onrender.com";
 const JWT_SECRET = process.env.JWT_SECRET || "secretkey";
+// Use a separate secret for refresh tokens if provided; otherwise, use the same one.
+const REFRESH_JWT_SECRET = process.env.REFRESH_JWT_SECRET || JWT_SECRET;
 
 // Connect to MongoDB
 mongoose
@@ -53,6 +55,7 @@ const UserSchema = new mongoose.Schema({
       analyzedAt: { type: Date, default: Date.now },
     },
   ],
+  // Optionally, you could store refresh tokens here for extra security.
 });
 
 const User = mongoose.model("users", UserSchema);
@@ -60,7 +63,7 @@ const User = mongoose.model("users", UserSchema);
 // ---------------------------------------------------------
 // ROOT/HEALTH CHECK ROUTE
 app.get("/", (req, res) => {
-  res.send("Node server is running. Use /register, /login, /analyze, etc.");
+  res.send("Node server is running. Use /register, /login, /refresh, /analyze, etc.");
 });
 // ---------------------------------------------------------
 
@@ -97,10 +100,34 @@ app.post("/login", async (req, res) => {
       console.log("Invalid credentials");
       return res.status(401).json({ message: "❌ Invalid credentials" });
     }
-    const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: "1h" });
-    res.json({ token });
+    // Generate a short-lived access token and a long-lived refresh token
+    const accessToken = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: "15m" });
+    const refreshToken = jwt.sign({ userId: user._id }, REFRESH_JWT_SECRET, { expiresIn: "7d" });
+    res.json({ accessToken, refreshToken });
   } catch (error) {
     console.error("Login error details:", error);
+    console.error("Stack trace:", error.stack);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Refresh endpoint
+app.post("/refresh", async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) return res.status(400).json({ message: "Refresh token is required" });
+    
+    jwt.verify(refreshToken, REFRESH_JWT_SECRET, (err, decoded) => {
+      if (err) {
+        console.error("Refresh token verification error:", err);
+        return res.status(401).json({ message: "Invalid or expired refresh token" });
+      }
+      const newAccessToken = jwt.sign({ userId: decoded.userId }, JWT_SECRET, { expiresIn: "15m" });
+      console.log("New access token generated for user:", decoded.userId);
+      return res.json({ accessToken: newAccessToken });
+    });
+  } catch (error) {
+    console.error("Refresh token error details:", error);
     console.error("Stack trace:", error.stack);
     res.status(500).json({ error: error.message });
   }
@@ -114,7 +141,7 @@ const authenticateUser = (req, res, next) => {
   jwt.verify(token, JWT_SECRET, (err, decoded) => {
     if (err) {
       console.error("JWT verification error:", err);
-      return res.status(401).json({ message: "Invalid token" });
+      return res.status(401).json({ message: "Invalid or expired token" });
     }
     req.userId = decoded.userId;
     next();
@@ -126,6 +153,9 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 // Analyze Endpoint
+// This endpoint receives an image and additional form fields,
+// calls the external Flask predict API and the agent recommendation API,
+// and returns a combined response.
 app.post("/analyze", upload.single("image"), async (req, res) => {
   console.log("Received /analyze request");
   try {
