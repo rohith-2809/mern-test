@@ -1,155 +1,66 @@
 import os
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # Disable GPU
+
 import logging
 import traceback
 import io
-import numpy as np
-import requests
 import tempfile
+import requests
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import tensorflow as tf  # <-- Import TensorFlow
-from tensorflow.keras.models import load_model  # Use TensorFlow's built-in Keras
-from PIL import Image, ImageEnhance, ImageOps
+from PIL import Image, ImageOps  # For image processing
 
-# Environment variables for model URLs
-BINARY_MODEL_URL = os.environ.get(
-    "BINARY_MODEL_URL",
-    "https://huggingface.co/vittamraj/predict-binary/resolve/main/pp2v2.keras"
-)
-MULTI_MODEL_URL = os.environ.get(
-    "MULTI_MODEL_URL",
-    "https://huggingface.co/vittamraj/predict-Multiclass/resolve/main/pp5v6.keras"
-)
-
-# Other environment variables
-NORMALIZATION_MODE = os.environ.get("NORMALIZATION_MODE", "minus1_to_1")
-USE_TEMPERATURE_SCALING = os.environ.get("USE_TEMPERATURE_SCALING", "True").lower() == "true"
-TEMPERATURE = float(os.environ.get("TEMPERATURE", 2.0))
-NUM_AUGMENTATIONS = int(os.environ.get("NUM_AUGMENTATIONS", 5))
+# Import gradio_client to call the remote Gradio APIs
+from gradio_client import Client, handle_file
 
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
 logging.basicConfig(level=logging.INFO)
 
-def load_model_from_url(url: str):
-    """
-    Downloads a Keras model file from the given URL and loads it into memory
-    without saving it permanently to disk.
-    """
-    logging.info(f"Loading model from {url}...")
-    response = requests.get(url, stream=True)
-    response.raise_for_status()
+# Instantiate Gradio API clients
+binary_client = Client("vittamraj/predict-binary-api")
+multi_client = Client("vittamraj/predict-MultiClass-api")
 
-    # Save to a temporary file, then load with Keras
-    with tempfile.NamedTemporaryFile(suffix=".keras") as tmp:
-        for chunk in response.iter_content(chunk_size=8192):
-            tmp.write(chunk)
-        tmp.flush()
-        model = load_model(tmp.name)
-    logging.info(f"Model loaded from {url}")
-    return model
-
-# Attempt to load the binary classification model
-try:
-    binary_model = load_model_from_url(BINARY_MODEL_URL)
-except Exception as e:
-    logging.error(f"Binary model loading failed: {e}")
-    binary_model = None
-
-# Attempt to load the multi-disease classification model
-try:
-    multi_model = load_model_from_url(MULTI_MODEL_URL)
-except Exception as e:
-    logging.error(f"Multi-disease model loading failed: {e}")
-    multi_model = None
-
-# Class labels
-binary_classes = ["Diseased", "Healthy"]
-multi_disease_classes = [
-    "Guava_Canker",
-    "Guava_Dot",
-    "Guava_Mummification",
-    "Guava_Rust",
-    "Healty_plants",
-    "Money_plant_Bacterial_wilt_disease",
-    "Money_plant_Manganese Toxicity",
-    "Neem_Alternaria",
-    "Neem_Dieback",
-    "Neem_Leaf_Blight",
-    "Neem_Leaf_Miners",
-    "Neem_Leaf_Miners_Powdery_Mildew",
-    "Neem_Powdery_Mildew",
-    "Tomato___Bacterial_spot",
-    "Tomato___Early_blight",
-    "Tomato___Late_blight",
-    "Tomato___Leaf_Mold"
-]
-
-def softmax(x):
-    e_x = np.exp(x - np.max(x))
-    return e_x / e_x.sum()
-
-def apply_temperature_scaling(logits, temperature):
-    return softmax(logits / temperature)
+# Define a healthy threshold (adjust as needed)
+HEALTHY_THRESHOLD = 0.5
 
 def dynamic_crop(img):
+    """
+    Dynamically crop the image by inverting the grayscale image,
+    thresholding it, and using the bounding box to crop.
+    """
     gray = img.convert("L")
     inverted = ImageOps.invert(gray)
+    # Convert to binary image: pixels below 50 become black, others white.
     bw = inverted.point(lambda x: 0 if x < 50 else 255, '1')
     bbox = bw.getbbox()
     if bbox:
         return img.crop(bbox)
     return img
 
-def basic_augmentations(img):
-    augmented_images = []
-    # Original
-    augmented_images.append(img)
-    # Horizontal flip
-    augmented_images.append(img.transpose(Image.FLIP_LEFT_RIGHT))
-    # Rotate by 15 degrees
-    augmented_images.append(img.rotate(15))
-    # Rotate by -15 degrees
-    augmented_images.append(img.rotate(-15))
-    # Brightness enhancement
-    bright_enhancer = ImageEnhance.Brightness(img)
-    augmented_images.append(bright_enhancer.enhance(1.1))
-    # Contrast enhancement
-    contrast_enhancer = ImageEnhance.Contrast(img)
-    augmented_images.append(contrast_enhancer.enhance(1.1))
-    return augmented_images
-
-def preprocess_and_augment_image(image_bytes):
+def preprocess_image(image_bytes):
+    """
+    Pre-process the image:
+      1. Open and convert to RGB.
+      2. Dynamically crop using the inverted grayscale.
+      3. Center-crop to a square.
+      4. Resize to 224x224 using high-quality resampling.
+    """
     try:
         img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+        # Apply dynamic crop
         img = dynamic_crop(img)
+        # Center crop to square
         width, height = img.size
         min_dim = min(width, height)
         left = (width - min_dim) // 2
         top = (height - min_dim) // 2
         img = img.crop((left, top, left + min_dim, top + min_dim))
+        # Resize to 224x224
         img = img.resize((224, 224), Image.LANCZOS)
-        contrast_enhancer = ImageEnhance.Contrast(img)
-        img = contrast_enhancer.enhance(1.0)
-        brightness_enhancer = ImageEnhance.Brightness(img)
-        img = brightness_enhancer.enhance(1.0)
-        aug_images = basic_augmentations(img)
-
-        processed_images = []
-        for aug_img in aug_images:
-            img_array = np.array(aug_img, dtype=np.float32)
-            if NORMALIZATION_MODE == "minus1_to_1":
-                img_array = (img_array / 127.5) - 1.0
-            else:
-                img_array = img_array / 255.0
-            img_array = np.expand_dims(img_array, axis=0)
-            processed_images.append(img_array)
-
-        return processed_images
+        return img
     except Exception as e:
-        logging.error(f"Error in preprocessing: {e}")
-        raise
+        raise Exception("Preprocessing error: " + str(e))
 
 @app.route('/')
 def index():
@@ -160,11 +71,7 @@ def predict():
     if request.method == 'OPTIONS':
         return jsonify({}), 200
 
-    # Ensure both models are loaded
-    if binary_model is None or multi_model is None:
-        return jsonify({'error': 'One or more models are not loaded.'}), 500
-
-    # Retrieve image from form data or raw request
+    # Retrieve image from form data or raw request body
     if 'image' in request.files:
         image_bytes = request.files['image'].read()
     elif request.data:
@@ -173,103 +80,56 @@ def predict():
         return jsonify({'error': 'No image provided'}), 400
 
     try:
-        processed_images = preprocess_and_augment_image(image_bytes)
+        # Pre-process the image
+        preprocessed_img = preprocess_image(image_bytes)
     except Exception as e:
-        return jsonify({'error': f'Image processing failed: {str(e)}'}), 500
+        logging.error("Preprocessing failed: " + str(e))
+        return jsonify({'error': f'Image preprocessing failed: {str(e)}'}), 500
 
     try:
-        binary_predictions = []
-        multi_predictions = []
+        # Save the pre-processed image to a temporary file.
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            preprocessed_img.save(tmp, format="PNG")
+            tmp.flush()
+            tmp_path = tmp.name
 
-        for img in processed_images:
-            # Use TensorFlow for array manipulation, if desired
-            img_tensor = tf.convert_to_tensor(img, dtype=tf.float32)
-
-            # Binary prediction
-            binary_logits = np.array(binary_model.predict(img_tensor)[0])
-            if USE_TEMPERATURE_SCALING:
-                binary_probs = apply_temperature_scaling(binary_logits, TEMPERATURE)
-            else:
-                if not np.isclose(np.sum(binary_logits), 1.0, atol=1e-3):
-                    binary_probs = softmax(binary_logits)
-                else:
-                    binary_probs = binary_logits
-            binary_predictions.append(binary_probs)
-
-            # Multi prediction
-            multi_logits = np.array(multi_model.predict(img_tensor)[0])
-            if not np.isclose(np.sum(multi_logits), 1.0, atol=1e-3):
-                multi_probs = softmax(multi_logits)
-            else:
-                multi_probs = multi_logits
-            multi_predictions.append(multi_probs)
-
-        # Ensemble
-        binary_avg = np.mean(binary_predictions, axis=0)
-        multi_avg = np.mean(multi_predictions, axis=0)
-        binary_std = np.std(binary_predictions, axis=0)
-        multi_std = np.std(multi_predictions, axis=0)
-
-        # Binary
-        binary_pred_index = np.argmax(binary_avg)
-        binary_confidence = float(binary_avg[binary_pred_index])
-        binary_confidence_interval = (
-            float(binary_avg[binary_pred_index] - binary_std[binary_pred_index]),
-            float(binary_avg[binary_pred_index] + binary_std[binary_pred_index])
+        # Call the binary API first.
+        # If your binary API expects an image file, you may use "image" instead of "input_data".
+        binary_result = binary_client.predict(
+            input_data=handle_file(tmp_path),
+            api_name="/predict"
         )
-        binary_prediction = ["Diseased", "Healthy"][binary_pred_index]
+        logging.info(f"Binary API result: {binary_result}")
 
-        logging.info(f"Binary ensemble avg: {binary_avg}, std: {binary_std}")
-        logging.info(f"Binary prediction: {binary_prediction} conf: {binary_confidence:.4f}")
+        binary_prediction = binary_result.get("prediction")
+        binary_confidence = binary_result.get("confidence", 0)
 
-        HEALTHY_THRESHOLD = 0.5
-
+        # If the plant is predicted as Healthy with high confidence, return that result.
         if binary_prediction == "Healthy" and binary_confidence >= HEALTHY_THRESHOLD:
-            result = {
+            combined_result = {
                 'prediction': "Healty_plants",
                 'confidence': binary_confidence,
-                'confidence_interval': binary_confidence_interval,
                 'model_used': "binary",
-                'binary_output': binary_avg.tolist()
+                'binary_output': binary_result
             }
         else:
-            multi_pred_index = np.argmax(multi_avg)
-            multi_confidence = float(multi_avg[multi_pred_index])
-            multi_confidence_interval = (
-                float(multi_avg[multi_pred_index] - multi_std[multi_pred_index]),
-                float(multi_avg[multi_pred_index] + multi_std[multi_pred_index])
+            # Otherwise, use the multi-class API to refine the diagnosis.
+            multi_result = multi_client.predict(
+                image=handle_file(tmp_path),
+                api_name="/predict"
             )
-            disease_prediction = [
-                "Guava_Canker",
-                "Guava_Dot",
-                "Guava_Mummification",
-                "Guava_Rust",
-                "Healty_plants",
-                "Money_plant_Bacterial_wilt_disease",
-                "Money_plant_Manganese Toxicity",
-                "Neem_Alternaria",
-                "Neem_Dieback",
-                "Neem_Leaf_Blight",
-                "Neem_Leaf_Miners",
-                "Neem_Leaf_Miners_Powdery_Mildew",
-                "Neem_Powdery_Mildew",
-                "Tomato___Bacterial_spot",
-                "Tomato___Early_blight",
-                "Tomato___Late_blight",
-                "Tomato___Leaf_Mold"
-            ][multi_pred_index]
+            logging.info(f"Multiclass API result: {multi_result}")
 
-            result = {
-                'prediction': disease_prediction,
-                'confidence': multi_confidence,
-                'confidence_interval': multi_confidence_interval,
+            combined_result = {
+                'prediction': multi_result.get("prediction"),
+                'confidence': multi_result.get("confidence"),
                 'binary_prediction': binary_prediction,
                 'binary_confidence': binary_confidence,
-                'binary_output': binary_avg.tolist(),
-                'multi_raw_output': multi_avg.tolist()
+                'binary_output': binary_result,
+                'multi_output': multi_result
             }
 
-        return jsonify(result)
+        return jsonify(combined_result)
     except Exception as e:
         logging.error("Prediction error: " + traceback.format_exc())
         return jsonify({'error': 'Prediction failed: ' + str(e)}), 500
