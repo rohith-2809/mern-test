@@ -124,8 +124,6 @@ const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 // Analyze Endpoint
-
-// Analyze Endpoint
 app.post("/analyze", upload.single("image"), async (req, res) => {
   console.log("Received /analyze request");
   try {
@@ -146,30 +144,29 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
       image.buffer,
       { headers: { "Content-Type": "application/octet-stream" } }
     );
-    console.log("Predict API response:", flaskResponse.data);
+    console.log("Predict API raw response:", flaskResponse.data);
 
     // Determine prediction:
     let status;
     if (typeof flaskResponse.data === "string") {
-      // If response is a string, try to extract prediction via regex
+      // Try to extract using a regular expression
       const regex = /Prediction:\s*([A-Za-z0-9_]+)\s*\(Confidence:\s*([\d.]+)\)/i;
       const match = regex.exec(flaskResponse.data);
       if (match) {
         status = match[1];
         console.log("Parsed prediction from string:", status);
-      } else {
-        throw new Error("No prediction returned from predict API");
       }
     } else {
       // Try both lower-case and capitalized keys
       status = flaskResponse.data.prediction || flaskResponse.data.Prediction;
-      if (!status) {
-        throw new Error("No prediction returned from predict API");
-      }
+    }
+    if (!status) {
+      console.warn("No prediction returned from predict API; using fallback 'Unknown'");
+      status = "Unknown";
     }
     console.log("Status (prediction):", status);
 
-    // Call the recommendation (agent) API with proper JSON header.
+    // Call the recommendation (agent) API
     const geminiEndpoint = `${GEMINI_URL}/recommend`;
     console.log("Calling recommendation API at:", geminiEndpoint);
     let recommendation;
@@ -203,7 +200,6 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
 
 // Analyze Endpoint
 // Get user history (Protected endpoint)
