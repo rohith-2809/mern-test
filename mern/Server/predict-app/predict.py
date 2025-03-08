@@ -66,14 +66,13 @@ def parse_result(result):
     Expected format: "Prediction: <class> (Confidence: <confidence>)"
     Returns a tuple: (prediction, confidence)
     """
-    # Use regular expression to extract prediction and confidence.
-    match = re.search(r"Prediction:\s*(\w+)\s*\(Confidence:\s*([\d\.]+)\)", result)
+    match = re.search(r"Prediction:\s*([A-Za-z0-9_]+)\s*\(Confidence:\s*([\d\.]+)\)", result)
     if match:
         prediction = match.group(1)
         confidence = float(match.group(2))
         return prediction, confidence
     else:
-        # Fallback: return the string as prediction with confidence 0
+        # Fallback: return the full string as prediction with confidence 0
         return result, 0
 
 @app.route('/')
@@ -85,12 +84,12 @@ def predict():
     if request.method == 'OPTIONS':
         return jsonify({}), 200
 
-    # Retrieve additional form fields from the frontend (if any)
+    # Retrieve additional form fields (if any)
     plant_type = request.form.get("plantType", "unknown")
     water_freq = request.form.get("waterFreq", "unknown")
     language = request.form.get("language", "english")
     
-    # Retrieve the image from form data (key "image") or from raw request data
+    # Retrieve the image from form data (key "image") or raw request data
     if 'image' in request.files:
         image_bytes = request.files['image'].read()
     elif request.data:
@@ -111,27 +110,26 @@ def predict():
             tmp.flush()
             tmp_path = tmp.name
 
-        # Call the binary API first.
-        # Updated to use the parameter name "image".
+        # Call the binary API first using the parameter name "image"
         binary_result = binary_client.predict(
             image=handle_file(tmp_path),
             api_name="/predict"
         )
         logging.info(f"Binary API result: {binary_result}")
 
-        # Check if the result is a string; if so, parse it.
+        # Extract prediction from binary result:
         if isinstance(binary_result, str):
             binary_prediction, binary_confidence = parse_result(binary_result)
         else:
-            binary_prediction = binary_result.get("prediction")
+            binary_prediction = binary_result.get("prediction") or binary_result.get("Prediction")
             binary_confidence = binary_result.get("confidence", 0)
 
-        # If the binary API predicts healthy with high confidence, return that result.
+        # Determine status and recommendation
         if binary_prediction == "Healthy" and binary_confidence >= HEALTHY_THRESHOLD:
             status = "Healthy_plants"
             recommendation = f"Your {plant_type} appears healthy. Continue your regular care routine."
         else:
-            # Otherwise, call the multi-class API for a refined diagnosis.
+            # Otherwise, call the multi-class API for refined diagnosis.
             multi_result = multi_client.predict(
                 image=handle_file(tmp_path),
                 api_name="/predict"
@@ -140,13 +138,13 @@ def predict():
             if isinstance(multi_result, str):
                 status, _ = parse_result(multi_result)
             else:
-                status = multi_result.get("prediction", "Unknown")
+                status = multi_result.get("prediction") or multi_result.get("Prediction") or "Unknown"
             recommendation = (
                 f"Your {plant_type} shows signs of {status}. "
                 f"Consider adjusting your care routine. Water frequency: {water_freq} days. (Language: {language})"
             )
 
-        # Return response with a structure matching what your frontend expects.
+        # Return response matching frontend expectations.
         return jsonify({
             "status": status,
             "recommendation": recommendation
