@@ -28,7 +28,7 @@ LANGUAGE_MAP = {
 
 def get_cure_recommendation(username, status, plant_type, water_frequency):
     """
-    Generates a fresh, personalized plant care recommendation using Gemini 1.5 Flash 001.
+    Generates a fresh, personalized plant care recommendation using Gemini-1.5-flash.
     """
     greeting = f"Dear {username}," if username else ""
     prompt = f"""
@@ -66,7 +66,7 @@ Generate the personalized, engaging recommendation based on the above instructio
     try:
         # Use the fully versioned Gemini model name (without "models/" prefix)
         response = genai.generate_text(
-            model="gemini-1.5-flash-001",
+            model="gemini-1.5-flash",
             prompt=prompt,
             temperature=0.7,
             candidate_count=1,
