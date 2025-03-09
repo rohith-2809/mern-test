@@ -44,7 +44,10 @@ const Login = () => {
       );
       if (response.data.token) {
         localStorage.setItem("token", response.data.token);
-        navigate("/analyze");
+        // Wrap navigation in a setTimeout to ensure proper state update on all devices
+        setTimeout(() => {
+          navigate("/analyze");
+        }, 0);
       } else {
         throw new Error("Token not received from server.");
       }
