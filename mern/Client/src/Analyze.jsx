@@ -12,9 +12,6 @@ import {
 import { useNavigate } from "react-router-dom";
 import Webcam from "react-webcam";
 
-// Use the fallback video URL directly as the default background video
-const fallbackVideo = "https://www.pexels.com/video/crocus-flowers-swaying-with-the-wind-6914239/";
-
 const videoConstraints = {
   width: 1280,
   height: 720,
@@ -46,9 +43,6 @@ const Analyze = () => {
   // Camera state
   const [useCamera, setUseCamera] = useState(false);
   const webcamRef = useRef(null);
-
-  // Video source state, initialized with the fallback URL
-  const [videoSrc, setVideoSrc] = useState(fallbackVideo);
 
   // Clean up preview URL when component unmounts or file changes
   useEffect(() => {
@@ -144,20 +138,15 @@ const Analyze = () => {
   };
 
   return (
-    <div className="relative min-h-screen font-sans">
-      {/* Background Video */}
-      <video
-        autoPlay
-        muted
-        loop
-        className="absolute top-0 left-0 w-full h-full object-cover pointer-events-none"
-        onError={() => {
-          console.error("Video failed to load");
-        }}
-      >
-        <source src={videoSrc} type="video/mp4" />
-      </video>
-
+    <div
+      className="relative min-h-screen font-sans"
+      style={{
+        backgroundImage: "url('/assets/analyze-bg.jpg')",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+      }}
+    >
       {/* Responsive Centered Content */}
       <div className="relative z-10 flex flex-col items-center justify-center p-4 sm:p-6 min-h-screen">
         <motion.div
