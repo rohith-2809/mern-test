@@ -1,95 +1,125 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+import google.generativeai as genai
 import logging
+from googletrans import Translator
 import os
-import google.generativeai as genai  # Updated client library
 
 app = Flask(__name__)
 CORS(app)
-logging.basicConfig(
-    level=logging.DEBUG,
-    format="%(asctime)s [%(levelname)s] %(message)s",
-)
+logging.basicConfig(level=logging.INFO)
 
-# Retrieve your API key from the environment
-API_KEY = os.getenv("GEMINI_API_KEY")
+# Load the Gemini API key from the environment variable and log an error if it's missing.
+API_KEY = os.environ.get("API_KEY")
 if not API_KEY:
-    logging.critical("GEMINI_API_KEY environment variable is not set.")
-    raise ValueError("GEMINI_API_KEY environment variable is not set.")
+    logging.error("Missing API_KEY environment variable.")
+    raise Exception("Missing API_KEY environment variable. Please set it in your Render environment.")
 
-# Configure the Google Generative AI client with your API key
 genai.configure(api_key=API_KEY)
+logging.info("Gemini API key configured successfully.")
 
-def get_cure_recommendation(plant_type, water_frequency, disease):
+# Initialize the translator and language mappings
+translator = Translator()
+LANGUAGE_MAP = {
+    "english": "en",
+    "telugu": "te",
+    "hindi": "hi",
+    # add more mappings as needed
+}
+
+def get_cure_recommendation(username, status, plant_type, water_frequency):
     """
-    Generates a personalized plant care recommendation based on plant type,
-    watering frequency, and disease name.
+    Generates a fresh, personalized plant care recommendation.
     """
+    greeting = f"Dear {username}," if username else ""
     prompt = f"""
-You are a compassionate and knowledgeable plant care advisor. Based on the details provided below, please generate a personalized plant care recommendation that is fresh and unique.
+{greeting}
+You are a compassionate and knowledgeable plant care advisor. Based on the details provided below, please generate a personalized plant care recommendation that is completely fresh and unique each time.
 
-Plant Type: {plant_type}
-Disease: {disease}
-Watering Frequency: {water_frequency}
+If the plant appears healthy:
+- Begin with a cheerful greeting.
+- Include a **new, never-repeated fun fact** about caring for a {plant_type}.
+- Recommend a maintenance fertilizer and include an online purchase link if possible.
+- Use upbeat language with plant-related emojis (e.g., 🌿, 🌸, 🍃).
 
-Instructions:
-- If the disease indicates a problem (e.g., "magnesium toxicity"), begin with a gentle and empathetic tone.
-- Provide 5 concise, numbered steps addressing the issue.
-- Include specific care suggestions (such as appropriate fertilizers, remedies, or adjustments in watering routine) with online purchase links if possible.
+If the plant shows signs of disease or abnormality (for example, 'Guava_Dot', yellow leaves, spots, or drooping):
+- Begin with a gentle, empathetic concern using caution emojis (⚠️🚨).
+- Provide **5 concise, numbered steps** focusing on recovery and improved care.
+- Recommend at least **two specific fertilizers** (include brand names if possible) with direct online purchase links if available.
+- Suggest natural remedies or adjustments in the care routine.
+- Ensure the recovery advice is new and uniquely generated.
+
+---------------------------
+User-Provided Details:
+- Plant Status: {status}
+- Plant Type: {plant_type}
+- Watering Frequency: Every {water_frequency} days
+
+Additional Instructions:
+- Always generate a fresh and unique recommendation that feels new each time.
+- Avoid repeating phrases or identical wording from previous responses.
 - Keep the response engaging, concise, and no longer than 6 text lines.
-- Ensure that the response is fresh and does not repeat phrases from previous answers.
-Generate the personalized recommendation based on the above instructions.
-    """
-    prompt = prompt.strip()
-    logging.debug("Generated prompt: %s", prompt)
+- Include fertilizer suggestions with online links where possible.
+---------------------------
 
+Generate the personalized, engaging recommendation based on the above instructions.
+    """
+    logging.info("Generating recommendation for plant type: %s", plant_type)
     try:
-        logging.info("Initializing Gemini Pro model for plantType: '%s', disease: '%s', water_frequency: '%s'", plant_type, disease, water_frequency)
-        model = genai.GenerativeModel("gemini-pro")
+        model = genai.GenerativeModel("gemini-1.5-flash")
         response = model.generate_content(prompt)
-        logging.debug("Received response from Gemini: %s", response)
-        if response.text:
+        if hasattr(response, 'text') and response.text:
             logging.info("Recommendation generated successfully.")
             return response.text.strip()
         else:
-            logging.error("No text returned from the model for prompt: %s", prompt)
-            return "No recommendation generated. Please try again later."
+            logging.error("Gemini API did not return a valid text response.")
+            return "The Gemini API did not return a valid response. Please try again later."
     except Exception as e:
-        logging.exception("Error generating recommendation for prompt: %s", prompt)
+        logging.exception("Error generating recommendation:")
         return f"An error occurred while generating the recommendation: {str(e)}"
 
 @app.route('/recommend', methods=['POST'])
 def gemini_recommendation():
-    try:
-        data = request.get_json()
-        if not data:
-            logging.error("Invalid JSON payload received.")
-            return jsonify({'error': 'Invalid JSON payload'}), 400
+    logging.info("Received a recommendation request.")
+    data = request.get_json()
+    if not data:
+        logging.error("Invalid JSON payload received.")
+        return jsonify({'error': 'Invalid JSON payload'}), 400
 
-        logging.debug("Received request data: %s", data)
-        plant_type = data.get('plantType')
-        water_frequency = data.get('waterFreq')
-        disease = data.get('disease')
+    username = data.get('username')
+    status = data.get('status')
+    plant_type = data.get('plantType')
+    water_frequency = data.get('waterFreq')
+    language = data.get('language', "english")
 
-        missing_fields = []
-        if not plant_type:
-            missing_fields.append("plantType")
-        if not water_frequency:
-            missing_fields.append("waterFreq")
-        if not disease:
-            missing_fields.append("disease")
-        if missing_fields:
-            error_message = f"Missing required parameter(s): {', '.join(missing_fields)}"
-            logging.error(error_message)
-            return jsonify({'error': error_message}), 400
+    missing_fields = []
+    if not status:
+        missing_fields.append("status")
+    if not plant_type:
+        missing_fields.append("plantType")
+    if not water_frequency:
+        missing_fields.append("waterFreq")
+    if missing_fields:
+        logging.error("Missing required parameters: %s", ', '.join(missing_fields))
+        return jsonify({'error': f"Missing required parameter(s): {', '.join(missing_fields)}"}), 400
 
-        recommendation = get_cure_recommendation(plant_type, water_frequency, disease)
-        logging.debug("Final recommendation: %s", recommendation)
-        return jsonify({'recommendation': recommendation})
-    except Exception as e:
-        logging.exception("Unexpected error in the /recommend endpoint.")
-        return jsonify({'error': f"An unexpected error occurred: {str(e)}"}), 500
+    recommendation = get_cure_recommendation(username, status, plant_type, water_frequency)
+
+    # Translate recommendation if needed
+    if language.lower() != "english":
+        dest_lang = LANGUAGE_MAP.get(language.lower(), "en")
+        logging.info("Translating recommendation to language: %s", language)
+        try:
+            translated = translator.translate(recommendation, dest=dest_lang)
+            recommendation = translated.text
+            logging.info("Translation successful.")
+        except Exception as e:
+            logging.exception("Translation error:")
+            recommendation += "\n\n(Note: Translation to your selected language failed.)"
+
+    logging.info("Sending response back to client.")
+    return jsonify({'recommendation': recommendation})
 
 if __name__ == '__main__':
-    # When deploying, ensure that the host and port settings align with your Render configuration.
+    # Run on port 5001 (adjust if needed)
     app.run(host='0.0.0.0', port=5001, debug=True)
