@@ -20,6 +20,7 @@ const Login = () => {
   const [error, setError] = useState("");
 
   // Video and fallback image URLs
+  // Note: Ensure the video URL is a direct video file (e.g. .mp4) if you want it to load.
   const initialVideoUrl =
     "https://www.pexels.com/video/flowers-of-wild-grass-in-bloom-3522502/";
   const fallbackImageUrl =
@@ -34,13 +35,10 @@ const Login = () => {
     setError("");
     setIsLoading(true);
     try {
-      // Updated URL to your Render backend
+      // Use the /login endpoint from your backend
       const response = await axios.post(
         "https://backend-lj86.onrender.com/login",
-        {
-          email,
-          password,
-        }
+        { email, password }
       );
       if (response.data.token) {
         localStorage.setItem("token", response.data.token);
