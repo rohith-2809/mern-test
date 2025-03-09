@@ -9,7 +9,7 @@ app = Flask(__name__)
 CORS(app)
 logging.basicConfig(level=logging.INFO)
 
-# Retrieve your API key from the environment (e.g., set in Render as GEMINI_API_KEY)
+# Retrieve your API key from the environment
 API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
     raise ValueError("GEMINI_API_KEY environment variable is not set.")
@@ -26,23 +26,23 @@ LANGUAGE_MAP = {
 def get_cure_recommendation(username, status, plant_type, water_frequency):
     """
     Generates a fresh, personalized plant care recommendation using the Gemini 1.5 Flash model.
-    We use "models/gemini-1.5-flash" from your available models.
     """
     greeting = f"Dear {username}," if username else ""
+    # Build your prompt. Consider removing markdown (like ** for bold) if not needed.
     prompt = f"""
 {greeting}
 You are a compassionate and knowledgeable plant care advisor. Based on the details provided below, please generate a personalized plant care recommendation that is completely fresh and unique each time.
 
 If the plant appears healthy:
 - Begin with a cheerful greeting.
-- Include a **new, never-repeated fun fact** about caring for a {plant_type}.
+- Include a new, never-repeated fun fact about caring for a {plant_type}.
 - Recommend a maintenance fertilizer and include an online purchase link if possible.
 - Use upbeat language with plant-related emojis (e.g., 🌿, 🌸, 🍃).
 
 If the plant shows signs of disease or abnormality (for example, 'Guava_Dot', yellow leaves, spots, or drooping):
 - Begin with a gentle, empathetic concern using caution emojis (⚠️🚨).
-- Provide **5 concise, numbered steps** focusing on recovery and improved care.
-- Recommend at least **two specific fertilizers** (include brand names if possible) with direct online purchase links if available.
+- Provide 5 concise, numbered steps focusing on recovery and improved care.
+- Recommend at least two specific fertilizers (include brand names if possible) with direct online purchase links if available.
 - Suggest natural remedies or adjustments in the care routine.
 - Ensure the recovery advice is new and uniquely generated.
 
@@ -61,12 +61,16 @@ Additional Instructions:
 
 Generate the personalized, engaging recommendation based on the above instructions.
     """
+    # Remove extra whitespace/newlines from the prompt
+    prompt = prompt.strip()
+
     try:
-        # Use the Gemini 1.5 Flash model endpoint (without any suffix like "-001")
+        # Use the Gemini 1.5 Flash model endpoint
         url = f"https://generativelanguage.googleapis.com/v1beta2/models/gemini-1.5-flash:generateText?key={API_KEY}"
         headers = {"Content-Type": "application/json"}
+        # Wrap the prompt string in an object with a "text" field.
         payload = {
-            "prompt": {"text": prompt},  # Note the updated prompt structure.
+            "prompt": {"text": prompt},
             "temperature": 0.7,
             "candidateCount": 1
         }
@@ -110,7 +114,7 @@ def gemini_recommendation():
 
     recommendation = get_cure_recommendation(username, status, plant_type, water_frequency)
 
-    # Translate recommendation if the request language is not English
+    # Translate recommendation if needed
     if language.lower() != "english":
         dest_lang = LANGUAGE_MAP.get(language.lower(), "en")
         try:
