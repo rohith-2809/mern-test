@@ -1,9 +1,9 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import google.generativeai as genai
 import logging
 import os
 from googletrans import Translator
+import requests
 
 app = Flask(__name__)
 CORS(app)
@@ -13,9 +13,6 @@ logging.basicConfig(level=logging.INFO)
 API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
     raise ValueError("GEMINI_API_KEY environment variable is not set.")
-
-# Configure the Gemini API with your API key
-genai.configure(api_key=API_KEY)
 
 # Initialize the translator and language mappings
 translator = Translator()
@@ -28,7 +25,7 @@ LANGUAGE_MAP = {
 
 def get_cure_recommendation(username, status, plant_type, water_frequency):
     """
-    Generates a fresh, personalized plant care recommendation using Gemini-1.5-flash.
+    Generates a fresh, personalized plant care recommendation using Gemini-1.5-flash-001 via direct REST API.
     """
     greeting = f"Dear {username}," if username else ""
     prompt = f"""
@@ -64,20 +61,26 @@ Additional Instructions:
 Generate the personalized, engaging recommendation based on the above instructions.
     """
     try:
-        # Use the fully versioned Gemini model name (without "models/" prefix)
-        response = genai.generate_text(
-            model="gemini-1.5-flash",
-            prompt=prompt,
-            temperature=0.7,
-            candidate_count=1,
-            top_k=40,
-            top_p=0.95,
-        )
-        if response.result:
-            return response.result.strip()
+        # Define the endpoint URL for Gemini v1beta2
+        url = f"https://generativelanguage.googleapis.com/v1beta2/models/gemini-1.5-flash-001:generateText?key={API_KEY}"
+        headers = {"Content-Type": "application/json"}
+        payload = {
+            "prompt": prompt,
+            "temperature": 0.7,
+            "candidateCount": 1
+        }
+        response = requests.post(url, headers=headers, json=payload)
+        if response.status_code == 200:
+            data = response.json()
+            candidates = data.get("candidates", [])
+            if candidates:
+                return candidates[0].get("output", "").strip()
+            else:
+                logging.error("No candidates returned in response.")
+                return "No recommendation generated. Please try again later."
         else:
-            logging.error("Gemini API did not return a valid text response.")
-            return "The Gemini API did not return a valid response. Please try again later."
+            logging.error("Gemini API error: %s", response.text)
+            return f"Error generating recommendation: {response.text}"
     except Exception as e:
         logging.exception("Error generating recommendation")
         return f"An error occurred while generating the recommendation: {str(e)}"
@@ -119,5 +122,4 @@ def gemini_recommendation():
     return jsonify({'recommendation': recommendation})
 
 if __name__ == '__main__':
-    # Run on port 5001 (adjust if needed)
     app.run(host='0.0.0.0', port=5001, debug=True)
