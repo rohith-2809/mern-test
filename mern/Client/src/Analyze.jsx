@@ -361,27 +361,27 @@ const Analyze = () => {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className={`mt-6 p-4 rounded-md border-2 shadow-lg transition-all duration-500 ease-out ${
-                result.prediction === "Healty_plants"
+                result.prediction === "Healthy_Plants"
                   ? "border-green-400 bg-green-100"
                   : "border-red-400 bg-red-100"
               }`}
             >
               <div className="flex items-center mb-2">
-                {result.prediction === "Healty_plants" ? (
+                {result.prediction === "Healthy_Plants" ? (
                   <FaCheckCircle className="text-green-500 mr-2" />
                 ) : (
                   <FaExclamationTriangle className="text-red-500 mr-2" />
                 )}
                 <h3 className="text-xl font-bold text-gray-800">
-                  {result.prediction === "Healty_plants"
-                    ? `${plantType} is healthy`
+                  {result.prediction === "Healthy_Plants"
+                    ? "Healthy"
                     : `Status: ${result.prediction}`}
                 </h3>
               </div>
               <p className="text-gray-700 whitespace-pre-wrap leading-relaxed mb-2">
                 {result.recommendation || "No recommendation provided."}
               </p>
-              {result.prediction !== "Healty_plants" && (
+              {result.prediction !== "Healthy_Plants" && (
                 <motion.button
                   onClick={() => navigate(`/cure-links/${result.prediction}`)}
                   whileHover={{ scale: 1.05 }}
