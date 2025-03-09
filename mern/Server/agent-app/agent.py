@@ -25,7 +25,8 @@ LANGUAGE_MAP = {
 
 def get_cure_recommendation(username, status, plant_type, water_frequency):
     """
-    Generates a fresh, personalized plant care recommendation using Gemini-1.5-flash via direct REST API.
+    Generates a fresh, personalized plant care recommendation using the Gemini 1.5 Flash model.
+    We use "models/gemini-1.5-flash" from your available models.
     """
     greeting = f"Dear {username}," if username else ""
     prompt = f"""
@@ -61,11 +62,11 @@ Additional Instructions:
 Generate the personalized, engaging recommendation based on the above instructions.
     """
     try:
-        # Updated endpoint URL with correct model name format (without "-001")
+        # Use the Gemini 1.5 Flash model endpoint (without any suffix like "-001")
         url = f"https://generativelanguage.googleapis.com/v1beta2/models/gemini-1.5-flash:generateText?key={API_KEY}"
         headers = {"Content-Type": "application/json"}
         payload = {
-            "prompt": prompt,
+            "prompt": {"text": prompt},  # Note the updated prompt structure.
             "temperature": 0.7,
             "candidateCount": 1
         }
