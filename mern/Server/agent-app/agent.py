@@ -46,7 +46,7 @@ Generate the personalized recommendation based on the above instructions.
     try:
         logging.info("Initializing Gemini Pro model for plantType: '%s', disease: '%s', water_frequency: '%s'", plant_type, disease, water_frequency)
         model = genai.GenerativeModel("gemini-pro")
-        response = model.generate_content(prompt, candidate_count=1)
+        response = model.generate_content(prompt)
         logging.debug("Received response from Gemini: %s", response)
         if response.text:
             logging.info("Recommendation generated successfully.")
@@ -91,4 +91,5 @@ def gemini_recommendation():
         return jsonify({'error': f"An unexpected error occurred: {str(e)}"}), 500
 
 if __name__ == '__main__':
+    # When deploying, ensure that the host and port settings align with your Render configuration.
     app.run(host='0.0.0.0', port=5001, debug=True)
