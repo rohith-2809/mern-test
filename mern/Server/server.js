@@ -60,8 +60,8 @@ const User = mongoose.model("users", UserSchema);
 app.get("/", (req, res) => {
   res.send("Node server is running. Use /register, /login, /analyze, etc.");
 });
+ 
 // ---------------------------------------------------------
-
 // Registration endpoint
 app.post("/register", async (req, res) => {
   try {
@@ -123,8 +123,8 @@ const authenticateUser = (req, res, next) => {
 const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// Analyze Endpoint
-app.post("/analyze", upload.single("image"), async (req, res) => {
+// Analyze Endpoint with user authentication and history update
+app.post("/analyze", authenticateUser, upload.single("image"), async (req, res) => {
   console.log("Received /analyze request");
   try {
     // Retrieve form fields from the request body
@@ -149,8 +149,6 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
     // Extract prediction from the response.
     let status;
     if (typeof flaskResponse.data === "string") {
-      // Use a regex to parse a string response like:
-      // "Prediction: Diseased (Confidence: 0.0020)"
       const regex = /Prediction:\s*([A-Za-z0-9_]+)\s*\(Confidence:\s*([\d.]+)\)/i;
       const match = regex.exec(flaskResponse.data);
       if (match) {
@@ -161,7 +159,6 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
         status = "Unknown";
       }
     } else {
-      // If the response is JSON, check multiple keys
       status =
         flaskResponse.data.prediction ||
         flaskResponse.data.Prediction ||
@@ -195,6 +192,23 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
       recommendation = "Sorry, cure recommendations are not available right now.";
     }
 
+    // Update user history in the database
+    try {
+      await User.findByIdAndUpdate(req.userId, {
+        $push: {
+          history: {
+            plantType,
+            status,
+            recommendation,
+            analyzedAt: new Date(),
+          },
+        },
+      });
+      console.log("User history updated successfully");
+    } catch (updateError) {
+      console.error("Error updating user history:", updateError);
+    }
+
     // Return the combined response to the frontend.
     res.json({
       prediction: status,
@@ -207,8 +221,6 @@ app.post("/analyze", upload.single("image"), async (req, res) => {
   }
 });
 
-
-// Analyze Endpoint
 // Get user history (Protected endpoint)
 app.get("/history", authenticateUser, async (req, res) => {
   try {
