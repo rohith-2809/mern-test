@@ -3,7 +3,7 @@ from flask_cors import CORS
 import logging
 import os
 from googletrans import Translator
-import requests
+import google.generativeai as genai  # Updated client library
 
 app = Flask(__name__)
 CORS(app)
@@ -13,6 +13,9 @@ logging.basicConfig(level=logging.INFO)
 API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
     raise ValueError("GEMINI_API_KEY environment variable is not set.")
+
+# Configure the Google Generative AI client with your API key
+genai.configure(api_key=API_KEY)
 
 # Initialize the translator and language mappings
 translator = Translator()
@@ -25,10 +28,10 @@ LANGUAGE_MAP = {
 
 def get_cure_recommendation(username, status, plant_type, water_frequency):
     """
-    Generates a fresh, personalized plant care recommendation using the Gemini 1.5 Flash model.
+    Generates a fresh, personalized plant care recommendation using the Gemini Pro model.
     """
     greeting = f"Dear {username}," if username else ""
-    # Build your prompt. Consider removing markdown (like ** for bold) if not needed.
+    # Build the prompt for generating a recommendation
     prompt = f"""
 {greeting}
 You are a compassionate and knowledgeable plant care advisor. Based on the details provided below, please generate a personalized plant care recommendation that is completely fresh and unique each time.
@@ -61,31 +64,17 @@ Additional Instructions:
 
 Generate the personalized, engaging recommendation based on the above instructions.
     """
-    # Remove extra whitespace/newlines from the prompt
     prompt = prompt.strip()
 
     try:
-        # Use the Gemini 1.5 Flash model endpoint
-        url = f"https://generativelanguage.googleapis.com/v1beta2/models/gemini-1.5-flash:generateText?key={API_KEY}"
-        headers = {"Content-Type": "application/json"}
-        # Wrap the prompt string in an object with a "text" field.
-        payload = {
-            "prompt": {"text": prompt},
-            "temperature": 0.7,
-            "candidateCount": 1
-        }
-        response = requests.post(url, headers=headers, json=payload)
-        if response.status_code == 200:
-            data = response.json()
-            candidates = data.get("candidates", [])
-            if candidates:
-                return candidates[0].get("output", "").strip()
-            else:
-                logging.error("No candidates returned in response.")
-                return "No recommendation generated. Please try again later."
+        # Use the updated Gemini Pro model with the new client method
+        model = genai.GenerativeModel("gemini-pro")
+        response = model.generate_content(prompt, temperature=0.7, candidate_count=1)
+        if response.text:
+            return response.text.strip()
         else:
-            logging.error("Gemini API error: %s", response.text)
-            return f"Error generating recommendation: {response.text}"
+            logging.error("No text returned from the model.")
+            return "No recommendation generated. Please try again later."
     except Exception as e:
         logging.exception("Error generating recommendation")
         return f"An error occurred while generating the recommendation: {str(e)}"
