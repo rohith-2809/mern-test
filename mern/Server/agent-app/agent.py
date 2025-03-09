@@ -9,7 +9,7 @@ app = Flask(__name__)
 CORS(app)
 logging.basicConfig(level=logging.INFO)
 
-# Load the Gemini API key from the environment variable and log an error if it's missing.
+# Load the Gemini API key from the environment variable
 API_KEY = os.environ.get("API_KEY")
 if not API_KEY:
     logging.error("Missing API_KEY environment variable.")
@@ -17,6 +17,13 @@ if not API_KEY:
 
 genai.configure(api_key=API_KEY)
 logging.info("Gemini API key configured successfully.")
+
+# List available models for debugging purposes
+try:
+    models = genai.list_models()
+    logging.info("Available models: %s", models)
+except Exception as e:
+    logging.error("Failed to list available models: %s", e)
 
 # Initialize the translator and language mappings
 translator = Translator()
@@ -27,7 +34,7 @@ LANGUAGE_MAP = {
     # add more mappings as needed
 }
 
-def get_cure_recommendation(username, status, plant_type, water_frequency):
+def get_cure_recommendation(username, status, plant_type, water_frequency, disease):
     """
     Generates a fresh, personalized plant care recommendation.
     """
@@ -36,13 +43,13 @@ def get_cure_recommendation(username, status, plant_type, water_frequency):
 {greeting}
 You are a compassionate and knowledgeable plant care advisor. Based on the details provided below, please generate a personalized plant care recommendation that is completely fresh and unique each time.
 
-If the plant appears healthy:
+If the plant appears healthy and there is no disease:
 - Begin with a cheerful greeting.
 - Include a **new, never-repeated fun fact** about caring for a {plant_type}.
 - Recommend a maintenance fertilizer and include an online purchase link if possible.
 - Use upbeat language with plant-related emojis (e.g., 🌿, 🌸, 🍃).
 
-If the plant shows signs of disease or abnormality (for example, 'Guava_Dot', yellow leaves, spots, or drooping):
+If the plant shows signs of disease or abnormality (e.g., '{disease}', yellow leaves, spots, or drooping):
 - Begin with a gentle, empathetic concern using caution emojis (⚠️🚨).
 - Provide **5 concise, numbered steps** focusing on recovery and improved care.
 - Recommend at least **two specific fertilizers** (include brand names if possible) with direct online purchase links if available.
@@ -54,6 +61,7 @@ User-Provided Details:
 - Plant Status: {status}
 - Plant Type: {plant_type}
 - Watering Frequency: Every {water_frequency} days
+- Disease: {disease}
 
 Additional Instructions:
 - Always generate a fresh and unique recommendation that feels new each time.
@@ -66,7 +74,8 @@ Generate the personalized, engaging recommendation based on the above instructio
     """
     logging.info("Generating recommendation for plant type: %s", plant_type)
     try:
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        # Use the fully qualified model name with the "models/" prefix.
+        model = genai.GenerativeModel("models/gemini-1.5-flash")
         response = model.generate_content(prompt)
         if hasattr(response, 'text') and response.text:
             logging.info("Recommendation generated successfully.")
@@ -91,6 +100,7 @@ def gemini_recommendation():
     plant_type = data.get('plantType')
     water_frequency = data.get('waterFreq')
     language = data.get('language', "english")
+    disease = data.get('disease', "none")
 
     missing_fields = []
     if not status:
@@ -99,11 +109,13 @@ def gemini_recommendation():
         missing_fields.append("plantType")
     if not water_frequency:
         missing_fields.append("waterFreq")
+    if not disease:
+        missing_fields.append("disease")
     if missing_fields:
         logging.error("Missing required parameters: %s", ', '.join(missing_fields))
         return jsonify({'error': f"Missing required parameter(s): {', '.join(missing_fields)}"}), 400
 
-    recommendation = get_cure_recommendation(username, status, plant_type, water_frequency)
+    recommendation = get_cure_recommendation(username, status, plant_type, water_frequency, disease)
 
     # Translate recommendation if needed
     if language.lower() != "english":
