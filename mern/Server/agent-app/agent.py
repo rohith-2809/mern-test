@@ -2,118 +2,93 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import logging
 import os
-from googletrans import Translator
 import google.generativeai as genai  # Updated client library
 
 app = Flask(__name__)
 CORS(app)
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
 
 # Retrieve your API key from the environment
 API_KEY = os.getenv("GEMINI_API_KEY")
 if not API_KEY:
+    logging.critical("GEMINI_API_KEY environment variable is not set.")
     raise ValueError("GEMINI_API_KEY environment variable is not set.")
 
 # Configure the Google Generative AI client with your API key
 genai.configure(api_key=API_KEY)
 
-# Initialize the translator and language mappings
-translator = Translator()
-LANGUAGE_MAP = {
-    "english": "en",
-    "telugu": "te",
-    "hindi": "hi",
-    # add more mappings as needed
-}
-
-def get_cure_recommendation(username, status, plant_type, water_frequency):
+def get_cure_recommendation(plant_type, water_frequency, disease):
     """
-    Generates a fresh, personalized plant care recommendation using the Gemini Pro model.
+    Generates a personalized plant care recommendation based on plant type,
+    watering frequency, and disease name.
     """
-    greeting = f"Dear {username}," if username else ""
-    # Build the prompt for generating a recommendation
     prompt = f"""
-{greeting}
-You are a compassionate and knowledgeable plant care advisor. Based on the details provided below, please generate a personalized plant care recommendation that is completely fresh and unique each time.
+You are a compassionate and knowledgeable plant care advisor. Based on the details provided below, please generate a personalized plant care recommendation that is fresh and unique.
 
-If the plant appears healthy:
-- Begin with a cheerful greeting.
-- Include a new, never-repeated fun fact about caring for a {plant_type}.
-- Recommend a maintenance fertilizer and include an online purchase link if possible.
-- Use upbeat language with plant-related emojis (e.g., 🌿, 🌸, 🍃).
+Plant Type: {plant_type}
+Disease: {disease}
+Watering Frequency: {water_frequency}
 
-If the plant shows signs of disease or abnormality (for example, 'Guava_Dot', yellow leaves, spots, or drooping):
-- Begin with a gentle, empathetic concern using caution emojis (⚠️🚨).
-- Provide 5 concise, numbered steps focusing on recovery and improved care.
-- Recommend at least two specific fertilizers (include brand names if possible) with direct online purchase links if available.
-- Suggest natural remedies or adjustments in the care routine.
-- Ensure the recovery advice is new and uniquely generated.
-
----------------------------
-User-Provided Details:
-- Plant Status: {status}
-- Plant Type: {plant_type}
-- Watering Frequency: Every {water_frequency} days
-
-Additional Instructions:
-- Always generate a fresh and unique recommendation that feels new each time.
-- Avoid repeating phrases or identical wording from previous responses.
+Instructions:
+- If the disease indicates a problem (e.g., "magnesium toxicity"), begin with a gentle and empathetic tone.
+- Provide 5 concise, numbered steps addressing the issue.
+- Include specific care suggestions (such as appropriate fertilizers, remedies, or adjustments in watering routine) with online purchase links if possible.
 - Keep the response engaging, concise, and no longer than 6 text lines.
-- Include fertilizer suggestions with online links where possible.
----------------------------
-
-Generate the personalized, engaging recommendation based on the above instructions.
+- Ensure that the response is fresh and does not repeat phrases from previous answers.
+Generate the personalized recommendation based on the above instructions.
     """
     prompt = prompt.strip()
+    logging.debug("Generated prompt: %s", prompt)
 
     try:
-        # Use the updated Gemini Pro model with the new client method
+        logging.info("Initializing Gemini Pro model for plantType: '%s', disease: '%s', water_frequency: '%s'", plant_type, disease, water_frequency)
         model = genai.GenerativeModel("gemini-pro")
-        response = model.generate_content(prompt, temperature=0.7, candidate_count=1)
+        response = model.generate_content(prompt, candidate_count=1)
+        logging.debug("Received response from Gemini: %s", response)
         if response.text:
+            logging.info("Recommendation generated successfully.")
             return response.text.strip()
         else:
-            logging.error("No text returned from the model.")
+            logging.error("No text returned from the model for prompt: %s", prompt)
             return "No recommendation generated. Please try again later."
     except Exception as e:
-        logging.exception("Error generating recommendation")
+        logging.exception("Error generating recommendation for prompt: %s", prompt)
         return f"An error occurred while generating the recommendation: {str(e)}"
 
 @app.route('/recommend', methods=['POST'])
 def gemini_recommendation():
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'Invalid JSON payload'}), 400
+    try:
+        data = request.get_json()
+        if not data:
+            logging.error("Invalid JSON payload received.")
+            return jsonify({'error': 'Invalid JSON payload'}), 400
 
-    username = data.get('username')
-    status = data.get('status')
-    plant_type = data.get('plantType')
-    water_frequency = data.get('waterFreq')
-    language = data.get('language', "english")
+        logging.debug("Received request data: %s", data)
+        plant_type = data.get('plantType')
+        water_frequency = data.get('waterFreq')
+        disease = data.get('disease')
 
-    missing_fields = []
-    if not status:
-        missing_fields.append("status")
-    if not plant_type:
-        missing_fields.append("plantType")
-    if not water_frequency:
-        missing_fields.append("waterFreq")
-    if missing_fields:
-        return jsonify({'error': f"Missing required parameter(s): {', '.join(missing_fields)}"}), 400
+        missing_fields = []
+        if not plant_type:
+            missing_fields.append("plantType")
+        if not water_frequency:
+            missing_fields.append("waterFreq")
+        if not disease:
+            missing_fields.append("disease")
+        if missing_fields:
+            error_message = f"Missing required parameter(s): {', '.join(missing_fields)}"
+            logging.error(error_message)
+            return jsonify({'error': error_message}), 400
 
-    recommendation = get_cure_recommendation(username, status, plant_type, water_frequency)
-
-    # Translate recommendation if needed
-    if language.lower() != "english":
-        dest_lang = LANGUAGE_MAP.get(language.lower(), "en")
-        try:
-            translated = translator.translate(recommendation, dest=dest_lang)
-            recommendation = translated.text
-        except Exception as e:
-            logging.error(f"Translation error: {e}")
-            recommendation += "\n\n(Note: Translation to your selected language failed.)"
-
-    return jsonify({'recommendation': recommendation})
+        recommendation = get_cure_recommendation(plant_type, water_frequency, disease)
+        logging.debug("Final recommendation: %s", recommendation)
+        return jsonify({'recommendation': recommendation})
+    except Exception as e:
+        logging.exception("Unexpected error in the /recommend endpoint.")
+        return jsonify({'error': f"An unexpected error occurred: {str(e)}"}), 500
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)
