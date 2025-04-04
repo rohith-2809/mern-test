@@ -193,7 +193,6 @@ export default function LandingPage() {
       {/* SEO Meta Tags */}
 
 
-      import { Helmet } from "react-helmet";
 
 
 <Helmet>
@@ -236,7 +235,7 @@ export default function LandingPage() {
   />
   <meta
     property="og:image"
-    content="https://mern-test-client.onrender.com/logo.jpg"
+    content="https://mern-test-client.onrender.com/LeafGaurd Logo.svg"
   />
   <meta property="og:type" content="website" />
   <meta
@@ -256,7 +255,7 @@ export default function LandingPage() {
   />
   <meta
     name="twitter:image"
-    content="https://mern-test-client.onrender.com/logo.jpg"
+    content="https://mern-test-client.onrender.com/LeafGaurd Logo.svg"
   />
   <meta name="twitter:image:alt" content="LeafGuard logo banner" />
   <meta name="twitter:site" content="@LeafGuardAI" />
@@ -281,9 +280,9 @@ export default function LandingPage() {
   />
   <link
     rel="apple-touch-icon"
-    href="https://mern-test-client.onrender.com/logo.jpg"
+    href="https://mern-test-client.onrender.com/LeafGaurd Logo.svg"
   />
-  <meta name="msapplication-TileImage" content="https://mern-test-client.onrender.com/logo.jpg" />
+  <meta name="msapplication-TileImage" content="https://mern-test-client.onrender.com/LeafGaurd Logo.svg" />
 
   {/* Structured Data (JSON-LD) */}
   <script type="application/ld+json">
@@ -294,13 +293,13 @@ export default function LandingPage() {
       "url": "https://mern-test-client.onrender.com",
       "description":
         "LeafGuard uses AI to detect, diagnose, and prevent plant diseases. Get expert insights and protect your garden.",
-      "image": "https://mern-test-client.onrender.com/logo.jpg",
+      "image": "https://mern-test-client.onrender.com/LeafGaurd Logo.svg",
       "publisher": {
         "@type": "Organization",
         "name": "LeafGuard Team",
         "logo": {
           "@type": "ImageObject",
-          "url": "https://mern-test-client.onrender.com/logo.jpg"
+          "url": "https://mern-test-client.onrender.com/LeafGaurd Logo.svg"
         }
       }
     })}
@@ -324,7 +323,7 @@ export default function LandingPage() {
           <motion.div variants={navItemVariants}>
             <Link to="/" className="flex items-center gap-2">
               <img
-                src="/logo.jpg"
+                src="/LeafGaurd Logo.svg"
                 alt="LeafGuard Logo"
                 className="w-10 h-10 object-cover"
               />
