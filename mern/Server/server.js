@@ -41,6 +41,12 @@ mongoose.connect(MONGODB_URI).then(() => console.log("✅ MongoDB connected")).c
 
 const app = express();
 
+// Middleware to log all incoming headers (for debugging Authorization issue)
+app.use((req, res, next) => {
+  console.log('Incoming Headers:', req.headers);
+  next();
+});
+
 // Global middleware
 app.use(helmet());             // Security headers
 app.use(compression());        // GZIP compression
