@@ -55,15 +55,16 @@ app.use(
     allowedHeaders: ["Content-Type","Authorization"]
   })
 );
-// Rate limiters
-totalLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1000 });
-authLimiter  = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, handler: (_, res) => res.status(429).json({ message: 'Too many requests' }) });
-app.use(totalLimiter);
-app.use('/login', authLimiter);
-app.use('/register', authLimiter);
-
-// Serve uploads
-app.use('/uploads', express.static(UPLOAD_DIR));
+// Explicitly handle preflight for all routes
+app.options(
+  "*",
+  cors({
+    origin: CLIENT_URL,
+    methods: ["GET","POST","PUT","PATCH","DELETE","OPTIONS"],
+    credentials: true,
+    allowedHeaders: ["Content-Type","Authorization"]
+  })
+);
 
 // Multer setup
 const storage = multer.diskStorage({
