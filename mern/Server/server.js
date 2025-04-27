@@ -189,10 +189,12 @@ app.get('/history', authenticateUser, async (req, res, next) => {
   }catch(e){ next(e); }
 });
 
-// Error handler\ napp.use((err,req,res,next)=>{
+// Error handler
+app.use((err, req, res, next) => {
   console.error(err);
-  res.status(err.status||500).json({ message:err.message||'Error' });
+  res.status(err.status || 500).json({ message: err.message || 'Error' });
 });
 
 // Start
+app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Listening on ${PORT}`));
 app.listen(PORT,'0.0.0.0',()=>console.log(`🚀 Listening on ${PORT}`));
