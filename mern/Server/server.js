@@ -5,7 +5,13 @@ const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const multer = require("multer");
-const sharp = require("sharp");
+let sharp;
+try {
+  sharp = require("sharp");
+} catch (e) {
+  console.warn("Sharp module not found; image resizing disabled.");
+  sharp = null;
+}
 const axios = require("axios");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
@@ -19,7 +25,7 @@ const FLASK_URL = "https://predict-app-mawg.onrender.com";
 const GEMINI_URL = "https://agent-app.onrender.com";
 const JWT_SECRET = "your_jwt_secret_here";
 const JWT_EXPIRES_IN = "1h";
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
 const UPLOAD_DIR = path.join(__dirname, "uploads");
 
 // Ensure upload directory exists
@@ -27,7 +33,7 @@ if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR);
 
 // Connect to MongoDB
 mongoose
-  .connect(MONGODB_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+  .connect(MONGODB_URI)
   .then(() => console.log("✅ MongoDB connected"))
   .catch((err) => {
     console.error("❌ MongoDB connection error:", err);
@@ -48,10 +54,10 @@ app.use(
     credentials: true,
   })
 );
-// Serve uploaded images statically
+// Serve uploaded images
 app.use('/uploads', express.static(UPLOAD_DIR));
 
-// Multer: store original and limit size
+// Multer setup (disk storage)
 const storage = multer.diskStorage({
   destination: UPLOAD_DIR,
   filename: (req, file, cb) => {
@@ -62,139 +68,215 @@ const storage = multer.diskStorage({
 });
 const upload = multer({
   storage,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (req, file, cb) => {
-    if (!file.mimetype.startsWith('image/')) return cb(new Error('Only image files allowed'), false);
+    if (!file.mimetype.startsWith('image/')) {
+      return cb(new Error('Only image files are allowed'), false);
+    }
     cb(null, true);
-  }
+  },
 });
 
-// JWT auth middleware
+// JWT authentication middleware
 const authenticateUser = (req, res, next) => {
-  const auth = req.headers.authorization || "";
-  const token = auth.startsWith('Bearer ') ? auth.split(' ')[1] : null;
-  if (!token) return res.status(401).json({ message: 'Access denied: no token' });
+  const authHeader = req.headers.authorization || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null;
+  if (!token) return res.status(401).json({ message: "Access denied: no token" });
+
   jwt.verify(token, JWT_SECRET, (err, decoded) => {
     if (err) {
-      if (err.name === 'TokenExpiredError') return res.status(401).json({ message: 'Token expired' });
-      return res.status(401).json({ message: 'Invalid token' });
+      if (err.name === "TokenExpiredError") {
+        return res.status(401).json({ message: "Token expired, please log in again" });
+      }
+      return res.status(401).json({ message: "Invalid token" });
     }
     req.userId = decoded.userId;
     next();
   });
 };
 
-// User model
-const userSchema = new mongoose.Schema({
-  username: { type: String, required: true },
-  email: { type: String, unique: true, required: true },
-  password: { type: String, required: true },
-  history: [{
-    plantType: String,
-    status: String,
-    recommendation: String,
-    imageUrl: String,
-    thumbnailUrl: String,
-    analyzedAt: { type: Date, default: Date.now }
-  }]
-}, { timestamps: true });
-const User = mongoose.model('User', userSchema);
+// User schema & model
+const userSchema = new mongoose.Schema(
+  {
+    username: { type: String, required: true },
+    email: { type: String, unique: true, required: true },
+    password: { type: String, required: true },
+    history: [
+      {
+        plantType: String,
+        status: String,
+        recommendation: String,
+        imageUrl: String,
+        thumbnailUrl: String,
+        analyzedAt: { type: Date, default: Date.now },
+      },
+    ],
+  },
+  { timestamps: true }
+);
+const User = mongoose.model("User", userSchema);
 
 // Routes
-app.get('/', (req, res) => res.json({ message: 'Server is running' }));
+app.get("/", (req, res) => res.status(200).json({ message: "Server is running" }));
 
 // Register
-app.post('/register', async (req, res, next) => {
+app.post("/register", async (req, res, next) => {
   try {
     const { username, email, password } = req.body;
-    if (!username || !email || !password) return res.status(400).json({ message: 'Missing fields' });
-    if (await User.exists({ email })) return res.status(409).json({ message: 'User exists' });
-    const hash = await bcrypt.hash(password,12);
-    await new User({ username, email, password: hash }).save();
-    res.status(201).json({ message: 'Registered' });
-  } catch (e) { next(e); }
+    if (!username || !email || !password) {
+      return res.status(400).json({ message: "username, email, and password are required" });
+    }
+    if (await User.exists({ email })) {
+      return res.status(409).json({ message: "User already exists" });
+    }
+    const hashed = await bcrypt.hash(password, 12);
+    await new User({ username, email, password: hashed }).save();
+    res.status(201).json({ message: "User registered successfully" });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // Login
-app.post('/login', async (req, res, next) => {
+app.post("/login", async (req, res, next) => {
   try {
-    const { email,password } = req.body;
-    if (!email||!password) return res.status(400).json({ message:'Missing credentials' });
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ message: "email and password are required" });
+    }
     const user = await User.findOne({ email });
-    if (!user||!(await bcrypt.compare(password,user.password))) return res.status(401).json({ message:'Invalid creds' });
-    const token = jwt.sign({ userId:user._id },JWT_SECRET,{expiresIn:JWT_EXPIRES_IN});
-    res.json({ token, expiresIn:JWT_EXPIRES_IN });
-  } catch(e){ next(e); }
+    if (!user || !(await bcrypt.compare(password, user.password))) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+    const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: JWT_EXPIRES_IN });
+    res.json({ token, expiresIn: JWT_EXPIRES_IN });
+  } catch (err) {
+    next(err);
+  }
 });
 
-// Analyze: resize, thumbnail, forward
-app.post('/analyze', authenticateUser, upload.single('image'), async (req, res, next) => {
+// Analyze
+app.post("/analyze", authenticateUser, upload.single("image"), async (req, res, next) => {
   try {
     const { plantType, waterFreq, language } = req.body;
-    if (!plantType||!waterFreq||!req.file) return res.status(400).json({ message:'Missing data or file' });
-
-    const filePath = path.join(UPLOAD_DIR, req.file.filename);
-    const thumbName = `thumb-${req.file.filename}`;
-    const thumbPath = path.join(UPLOAD_DIR, thumbName);
-    // Resize max 800px
-    const buffer = await sharp(filePath)
-      .resize(800,800,{fit:'inside'})
-      .jpeg({ quality:80 })
-      .toBuffer();
-    // Save resized buffer back
-    fs.writeFileSync(filePath, buffer);
-    // Create thumbnail 200px
-    await sharp(buffer)
-      .resize(200,200,{fit:'cover'})
-      .toFile(thumbPath);
-
-    // Predict
-    const predictRes = await axios.post(
-      `${FLASK_URL}/predict`, buffer,
-      { headers:{ 'Content-Type':'application/octet-stream' }}
-    );
-    let status='Unknown';
-    if(typeof predictRes.data==='string'){
-      const m=predictRes.data.match(/Prediction:\s*(\w+)/);
-      if(m) status=m[1];
-    } else {
-      status=predictRes.data.prediction||predictRes.data.status||status;
+    if (!plantType || !waterFreq || !req.file) {
+      return res.status(400).json({ message: "Missing fields or image file" });
     }
-    // Recommend
-    let recommendation='';
-    try{
-      const rec = await axios.post(`${GEMINI_URL}/recommend`,{ status,plantType,waterFreq:+waterFreq,language });
-      recommendation=rec.data.recommendation;
-    }catch{ recommendation='Unavailable'; }
-    // Save history
-    const imageUrl=`/uploads/${req.file.filename}`;
-    const thumbnailUrl=`/uploads/${thumbName}`;
-    await User.findByIdAndUpdate(req.userId,{ $push:{ history:{ plantType,status,recommendation,imageUrl,thumbnailUrl }} });
-    res.json({ prediction:status,recommendation,imageUrl,thumbnailUrl });
-  } catch(e){ next(e); }
+
+    const originalPath = path.join(UPLOAD_DIR, req.file.filename);
+    let resizedBuffer = null;
+    let thumbnailPath = null;
+
+    if (sharp) {
+      // Resize to max 800x800
+      resizedBuffer = await sharp(originalPath)
+        .resize(800, 800, { fit: 'inside' })
+        .jpeg({ quality: 80 })
+        .toBuffer();
+      fs.writeFileSync(originalPath, resizedBuffer);
+      // Create thumbnail 200x200
+      const thumbName = `thumb-${req.file.filename}`;
+      thumbnailPath = path.join(UPLOAD_DIR, thumbName);
+      await sharp(resizedBuffer)
+        .resize(200, 200, { fit: 'cover' })
+        .toFile(thumbnailPath);
+    }
+
+    // Use buffer for prediction if resized, otherwise file stream
+    const imageData = resizedBuffer || fs.readFileSync(originalPath);
+    const predictRes = await axios.post(
+      `${FLASK_URL}/predict`,
+      imageData,
+      { headers: { 'Content-Type': 'application/octet-stream' } }
+    );
+    let status = 'Unknown';
+    if (typeof predictRes.data === 'string') {
+      const match = predictRes.data.match(/Prediction:\s*(\w+)/);
+      if (match) status = match[1];
+    } else {
+      status = predictRes.data.prediction || predictRes.data.status || status;
+    }
+
+    // Fetch recommendation
+    let recommendation = '';
+    try {
+      const rec = await axios.post(`${GEMINI_URL}/recommend`, {
+        status,
+        plantType,
+        waterFreq: parseInt(waterFreq, 10),
+        language,
+      });
+      recommendation = rec.data.recommendation;
+    } catch {
+      recommendation = 'Recommendations unavailable';
+    }
+
+    const imageUrl = `/uploads/${req.file.filename}`;
+    const thumbnailUrl = thumbnailPath
+      ? `/uploads/${path.basename(thumbnailPath)}`
+      : imageUrl;
+
+    // Save history entry
+    await User.findByIdAndUpdate(req.userId, {
+      $push: {
+        history: { plantType, status, recommendation, imageUrl, thumbnailUrl },
+      },
+    });
+
+    res.json({ prediction: status, recommendation, imageUrl, thumbnailUrl });
+  } catch (err) {
+    next(err);
+  }
 });
 
 // History with pagination
-app.get('/history', authenticateUser, async (req, res, next) => {
+app.get("/history", authenticateUser, async (req, res, next) => {
   try {
-    const page = Math.max(parseInt(req.query.page)||1,1);
-    const limit = Math.min(Math.max(parseInt(req.query.limit)||10,1),100);
-    const skip=(page-1)*limit;
-    const [result]=await User.aggregate([
-      { $match:{ _id:mongoose.Types.ObjectId(req.userId) } },
-      { $project:{ username:1,total:{ $size:'$history' },history:{$slice:['$history',skip,limit] } }}
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 100);
+    const skip = (page - 1) * limit;
+
+    const [result] = await User.aggregate([
+      { $match: { _id: mongoose.Types.ObjectId(req.userId) } },
+      {
+        $project: {
+          username: 1,
+          totalItems: { $size: "$history" },
+          history: { $slice: ["$history", skip, limit] },
+        },
+      },
     ]);
-    if(!result) return res.status(404).json({ message:'User not found' });
-    res.json({ username:result.username, history:result.history, page,limit,totalItems:result.total, totalPages:Math.ceil(result.total/limit) });
-  }catch(e){ next(e); }
+
+    if (!result) return res.status(404).json({ message: "User not found" });
+
+    res.json({
+      username: result.username,
+      history: result.history,
+      page,
+      limit,
+      totalItems: result.totalItems,
+      totalPages: Math.ceil(result.totalItems / limit),
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
-// Error handler
+// Global error handler
 app.use((err, req, res, next) => {
   console.error(err);
-  res.status(err.status || 500).json({ message: err.message || 'Error' });
+  res.status(err.status || 500).json({ message: err.message || "Internal Server Error" });
 });
 
-// Start
-app.listen(PORT, '0.0.0.0', () => console.log(`🚀 Listening on ${PORT}`));
-app.listen(PORT,'0.0.0.0',()=>console.log(`🚀 Listening on ${PORT}`));
+// Start server with error handling
+const server = app.listen(PORT, "0.0.0.0", () =>
+  console.log(`🚀 Server listening on port ${PORT}`)
+);
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`Port ${PORT} is already in use. Please free it or use a different PORT.`);
+    process.exit(1);
+  }
+  console.error("Server error:", err);
+  process.exit(1);
+});
