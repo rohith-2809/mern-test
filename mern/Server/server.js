@@ -88,13 +88,17 @@ const upload = multer({
   }
 });
 
-// JWT auth
+// JWT auth middleware (accepts both raw token and 'Bearer ' prefix)
 const authenticate = (req, res, next) => {
   const header = req.headers.authorization;
-  if (!header?.startsWith('Bearer ')) return res.status(401).json({ message: 'No token' });
-  const token = header.split(' ')[1];
+  if (!header) return res.status(401).json({ message: 'No token provided' });
+  // Support 'Bearer <token>' or raw token
+  const token = header.startsWith('Bearer ') ? header.split(' ')[1] : header;
+  if (!token) return res.status(401).json({ message: 'Invalid token format' });
   jwt.verify(token, JWT_SECRET, (err, decoded) => {
-    if (err) return res.status(401).json({ message: err.name === 'TokenExpiredError' ? 'Expired' : 'Invalid' });
+    if (err) {
+      return res.status(401).json({ message: err.name === 'TokenExpiredError' ? 'Token expired' : 'Invalid token' });
+    }
     req.userId = decoded.userId;
     next();
   });
