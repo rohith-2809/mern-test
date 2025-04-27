@@ -1,158 +1,148 @@
-import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"  # Disable GPU
 
-import logging
-import traceback
+import os
 import io
-import tempfile
 import re
-import requests
+import tempfile
+import traceback
+import logging
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from PIL import Image, ImageOps  # For image processing
+from PIL import Image, ImageOps
 
-# Import gradio_client to call the remote Hugging Face Spaces APIs
 from gradio_client import Client, handle_file
 
+# ——— Configuration —————————————
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"        # Disable GPU (if you like)
+PORT               = int(os.environ.get("PORT", 5002))
+HEALTHY_THRESHOLD  = 0.5
+
+# Replace with your actual HF Space names:
+BINARY_SPACE       = "vittamraj/predict-binary-api"
+MULTI_SPACE        = "vittamraj/predict-MultiClass-api"
+
+# ——— Logging & Flask setup —————————
+logging.basicConfig(level=logging.INFO)
 app = Flask(__name__)
 CORS(app, supports_credentials=True)
-logging.basicConfig(level=logging.INFO)
 
-# Instantiate Gradio API clients from your Hugging Face Spaces
-binary_client = Client("vittamraj/predict-binary-api")
-multi_client = Client("vittamraj/predict-MultiClass-api")
+# Instantiate HF Space clients
+binary_client = Client(BINARY_SPACE)
+multi_client  = Client(MULTI_SPACE)
 
-# Define a healthy threshold (adjust as needed)
-HEALTHY_THRESHOLD = 0.5
-
-def dynamic_crop(img):
-    """
-    Dynamically crop the image by converting to grayscale, inverting it,
-    thresholding, and cropping to the detected bounding box.
-    """
-    gray = img.convert("L")
+# ——— Image pre-processing —————————
+def dynamic_crop(img: Image.Image) -> Image.Image:
+    gray     = img.convert("L")
     inverted = ImageOps.invert(gray)
-    # Create a binary image: pixels below 50 become black; others white.
-    bw = inverted.point(lambda x: 0 if x < 50 else 255, '1')
-    bbox = bw.getbbox()
-    if bbox:
-        return img.crop(bbox)
-    return img
+    bw       = inverted.point(lambda x: 0 if x < 50 else 255, "1")
+    bbox     = bw.getbbox()
+    return img.crop(bbox) if bbox else img
 
-def preprocess_image(image_bytes):
-    """
-    Pre-process the image:
-      1. Open and convert to RGB.
-      2. Dynamically crop using inverted grayscale.
-      3. Center-crop to a square.
-      4. Resize to 224x224 using high-quality LANCZOS resampling.
-    """
-    try:
-        img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        img = dynamic_crop(img)
-        width, height = img.size
-        min_dim = min(width, height)
-        left = (width - min_dim) // 2
-        top = (height - min_dim) // 2
-        img = img.crop((left, top, left + min_dim, top + min_dim))
-        img = img.resize((224, 224), Image.LANCZOS)
-        return img
-    except Exception as e:
-        raise Exception("Preprocessing error: " + str(e))
+def preprocess_image(image_bytes: bytes) -> Image.Image:
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    img = dynamic_crop(img)
 
-def parse_result(result):
-    """
-    Parse the result from the API if it is a string.
-    Expected format: "Prediction: <class> (Confidence: <confidence>)"
-    Returns a tuple: (prediction, confidence)
-    """
-    match = re.search(r"Prediction:\s*([A-Za-z0-9_]+)\s*\(Confidence:\s*([\d\.]+)\)", result)
+    # center-crop to square
+    w, h   = img.size
+    m      = min(w, h)
+    left   = (w - m) // 2
+    top    = (h - m) // 2
+    img    = img.crop((left, top, left + m, top + m))
+
+    # resize to 224×224
+    return img.resize((224, 224), Image.LANCZOS)
+
+# ——— Parse “Prediction: Class (Confidence: 0.95)” strings ——
+def parse_result(text: str):
+    match = re.search(r"Prediction:\s*([\w_]+)\s*\(Confidence:\s*([\d\.]+)\)", text)
     if match:
-        prediction = match.group(1)
-        confidence = float(match.group(2))
-        return prediction, confidence
-    else:
-        # Fallback: return the full string as prediction with confidence 0
-        return result, 0
+        return match.group(1), float(match.group(2))
+    return text, 0.0
 
-@app.route('/')
-def index():
-    return "Predict API is running. Use POST /predict to analyze an image."
+# ——— Health check ————————————————
+@app.route("/", methods=["GET", "HEAD"])
+def health():
+    return "", 200
 
-@app.route('/predict', methods=['POST', 'OPTIONS'])
+# ——— Prediction endpoint ——————————
+@app.route("/predict", methods=["POST", "OPTIONS"])
 def predict():
-    if request.method == 'OPTIONS':
+    if request.method == "OPTIONS":
+        # CORS preflight
         return jsonify({}), 200
 
-    # Retrieve additional form fields (if any)
+    # Optional form fields
     plant_type = request.form.get("plantType", "unknown")
     water_freq = request.form.get("waterFreq", "unknown")
-    language = request.form.get("language", "english")
-    
-    # Retrieve the image from form data (key "image") or raw request data
-    if 'image' in request.files:
-        image_bytes = request.files['image'].read()
+    language   = request.form.get("language", "english")
+
+    # Load image bytes
+    if "image" in request.files:
+        image_bytes = request.files["image"].read()
     elif request.data:
         image_bytes = request.data
     else:
-        return jsonify({'error': 'No image provided'}), 400
+        return jsonify({"error": "No image provided"}), 400
 
+    # Preprocess
     try:
-        preprocessed_img = preprocess_image(image_bytes)
+        img = preprocess_image(image_bytes)
     except Exception as e:
         logging.error("Preprocessing failed: " + str(e))
-        return jsonify({'error': f'Image preprocessing failed: {str(e)}'}), 500
+        return jsonify({"error": f"Image preprocessing failed: {e}"}), 500
 
+    # Write to temp file for gradio_client.handle_file
+    tmp_path = None
     try:
-        # Save the pre-processed image to a temporary file.
         with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
-            preprocessed_img.save(tmp, format="PNG")
-            tmp.flush()
+            img.save(tmp, format="PNG")
             tmp_path = tmp.name
 
-        # Call the binary API first using the parameter name "image"
-        binary_result = binary_client.predict(
+        # 1) Binary API
+        bin_res = binary_client.predict(
             image=handle_file(tmp_path),
             api_name="/predict"
         )
-        logging.info(f"Binary API result: {binary_result}")
+        logging.info(f"Binary API → {bin_res}")
 
-        # Extract prediction from binary result:
-        if isinstance(binary_result, str):
-            binary_prediction, binary_confidence = parse_result(binary_result)
+        if isinstance(bin_res, str):
+            pred, conf = parse_result(bin_res)
         else:
-            binary_prediction = binary_result.get("prediction") or binary_result.get("Prediction")
-            binary_confidence = binary_result.get("confidence", 0)
+            pred = bin_res.get("prediction") or bin_res.get("Prediction", "")
+            conf = float(bin_res.get("confidence", 0))
 
-        # Determine status and recommendation
-        if binary_prediction == "Healthy" and binary_confidence >= HEALTHY_THRESHOLD:
-            status = "Healthy_plants"
-            recommendation = f"Your {plant_type} appears healthy. Continue your regular care routine."
+        if pred == "Healthy" and conf >= HEALTHY_THRESHOLD:
+            status         = "Healthy_plants"
+            recommendation = f"Your {plant_type} appears healthy. Continue regular care."
         else:
-            # Otherwise, call the multi-class API for refined diagnosis.
-            multi_result = multi_client.predict(
+            # 2) Multi-class API for refined label
+            multi_res = multi_client.predict(
                 image=handle_file(tmp_path),
                 api_name="/predict"
             )
-            logging.info(f"Multiclass API result: {multi_result}")
-            if isinstance(multi_result, str):
-                status, _ = parse_result(multi_result)
+            logging.info(f"Multiclass API → {multi_res}")
+
+            if isinstance(multi_res, str):
+                status, _ = parse_result(multi_res)
             else:
-                status = multi_result.get("prediction") or multi_result.get("Prediction") or "Unknown"
+                status = multi_res.get("prediction") or multi_res.get("Prediction", "Unknown")
+
             recommendation = (
                 f"Your {plant_type} shows signs of {status}. "
-                f"Consider adjusting your care routine. Water frequency: {water_freq} days. (Language: {language})"
+                f"Adjust care routine; water every {water_freq} days. (Language: {language})"
             )
 
-        # Return response matching frontend expectations.
-        return jsonify({
-            "status": status,
-            "recommendation": recommendation
-        })
-    except Exception as e:
-        logging.error("Prediction error: " + traceback.format_exc())
-        return jsonify({'error': 'Prediction failed: ' + str(e)}), 500
+        return jsonify({ "status": status, "recommendation": recommendation })
 
-if __name__ == '__main__':
-    port = int(os.environ.get("PORT", 5002))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    except Exception:
+        logging.error("Prediction error:\n" + traceback.format_exc())
+        return jsonify({"error": "Prediction failed"}), 500
+
+    finally:
+        # Clean up temp file
+        if tmp_path and os.path.exists(tmp_path):
+            try: os.unlink(tmp_path)
+            except: pass
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=PORT, debug=True)
