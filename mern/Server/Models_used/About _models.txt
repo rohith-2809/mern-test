@@ -36,8 +36,9 @@ Etc.
 This CNN is deeper and more complex than the binary model to capture fine-grained features that differentiate between diseases.
 
 📝 Conclusion
-You’ve built two powerful deep learning models for plant disease detection.
+We've built two powerful deep learning models for plant disease detection.
 
 The Binary Model is lightweight, great for quick screening.
 The Multiclass Model is more detailed, enabling specific diagnosis and tailored treatments.
 These models can empower farmers, agronomists, and researchers to detect and control plant diseases more efficiently, ensuring healthier crops and better yields.
+
